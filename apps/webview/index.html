@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clarity IDE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark-dimmed.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+</head>
+<body>
+
+<!-- ══ OVERLAYS ══════════════════════════════════════════════════════════════ -->
+
+<!-- Toast notification container -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Explorer context menu -->
+<div id="ctx-menu" class="ctx-menu" style="display:none">
+  <button class="ctx-menu-item" id="ctxm-new-file"><i data-lucide="file-plus"></i>New File</button>
+  <button class="ctx-menu-item" id="ctxm-new-folder"><i data-lucide="folder-plus"></i>New Folder</button>
+  <div class="ctx-menu-sep"></div>
+  <button class="ctx-menu-item" id="ctxm-rename"><i data-lucide="pencil"></i>Rename</button>
+  <button class="ctx-menu-item danger" id="ctxm-delete"><i data-lucide="trash-2"></i>Delete</button>
+  <div class="ctx-menu-sep"></div>
+  <button class="ctx-menu-item" id="ctxm-copy-path"><i data-lucide="copy"></i>Copy Path</button>
+</div>
+
+<!-- Go-to-line dialog -->
+<div id="goto-overlay" class="goto-overlay" style="display:none">
+  <div class="goto-modal">
+    <div class="goto-row">
+      <i data-lucide="corner-down-right" class="goto-icon"></i>
+      <input id="goto-input" class="goto-input" placeholder="Go to line (e.g. 42)" autocomplete="off" spellcheck="false" />
+      <kbd class="kbd">ESC</kbd>
+    </div>
+    <div class="goto-hint" id="goto-hint"></div>
+  </div>
+</div>
+
+<!-- Command Palette -->
+<div id="palette-overlay" class="overlay">
+  <div class="palette-modal">
+    <div class="palette-search-row">
+      <i data-lucide="terminal" class="palette-icon"></i>
+      <input id="palette-input" class="palette-input" placeholder="Search commands, files, settings…" autocomplete="off" spellcheck="false" />
+      <kbd class="kbd">ESC</kbd>
+    </div>
+    <div class="palette-divider"></div>
+    <ul id="palette-results" class="palette-results"></ul>
+    <div class="palette-footer">
+      <span><kbd class="kbd-sm">↑↓</kbd> navigate</span>
+      <span><kbd class="kbd-sm">↵</kbd> select</span>
+      <span><kbd class="kbd-sm">ESC</kbd> close</span>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Panel -->
+<div id="settings-overlay" class="overlay">
+  <div class="settings-modal">
+    <div class="settings-header">
+      <div class="settings-title">
+        <i data-lucide="settings-2"></i>
+        <span>Clarity Settings</span>
+      </div>
+      <div class="settings-search-wrap">
+        <i data-lucide="search" class="settings-search-icon"></i>
+        <input id="settings-search" class="settings-search-input" placeholder="Search settings…" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="settings-mode-toggle">
+        <button class="mode-btn active" id="mode-basic">Basic</button>
+        <button class="mode-btn" id="mode-advanced">Advanced</button>
+      </div>
+      <button id="settings-close" class="icon-btn" title="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="settings-body">
+      <nav class="settings-nav">
+        <button class="settings-nav-item active" data-section="appearance"><i data-lucide="palette"></i><span>Appearance</span></button>
+        <button class="settings-nav-item" data-section="editor"><i data-lucide="code-2"></i><span>Editor</span></button>
+        <button class="settings-nav-item" data-section="ai"><i data-lucide="bot"></i><span>AI / Models</span></button>
+        <button class="settings-nav-item" data-section="keybindings"><i data-lucide="keyboard"></i><span>Keybindings</span></button>
+        <button class="settings-nav-item" data-section="context"><i data-lucide="database"></i><span>Context Engine</span></button>
+        <button class="settings-nav-item advanced-only" data-section="providers"><i data-lucide="server"></i><span>Providers</span></button>
+        <button class="settings-nav-item advanced-only" data-section="telemetry"><i data-lucide="activity"></i><span>Telemetry</span></button>
+        <button class="settings-nav-item advanced-only" data-section="experimental"><i data-lucide="flask-conical"></i><span>Experimental</span></button>
+      </nav>
+      <div class="settings-content">
+
+        <!-- Appearance -->
+        <section class="settings-section active" id="sec-appearance">
+          <h2 class="sec-title">Appearance</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Theme</span>
+                <span class="setting-desc">Overall color scheme</span>
+              </div>
+              <select class="setting-control" id="s-theme">
+                <option value="dark">Dark (default)</option>
+                <option value="darker">Darker</option>
+                <option value="midnight">Midnight Blue</option>
+                <option value="gruvbox">Gruvbox Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Accent Color</span>
+                <span class="setting-desc">Primary highlight color</span>
+              </div>
+              <div class="color-picker-row">
+                <div class="color-swatch active" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></div>
+                <div class="color-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Violet"></div>
+                <div class="color-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></div>
+                <div class="color-swatch" data-color="#10b981" style="background:#10b981" title="Emerald"></div>
+                <div class="color-swatch" data-color="#f59e0b" style="background:#f59e0b" title="Amber"></div>
+                <div class="color-swatch" data-color="#ef4444" style="background:#ef4444" title="Red"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Font Size</span>
+                <span class="setting-desc">Editor font size (px)</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-font-size" value="13" min="10" max="22" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Font Family</span>
+                <span class="setting-desc">Editor monospace font</span>
+              </div>
+              <select class="setting-control" id="s-font-family">
+                <option value="'Geist Mono', monospace">Geist Mono</option>
+                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                <option value="'Fira Code', monospace">Fira Code</option>
+                <option value="'Cascadia Code', monospace">Cascadia Code</option>
+                <option value="monospace">System Mono</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Scanline Effect</span>
+                <span class="setting-desc">Subtle CRT scanline overlay</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-scanlines" checked /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Sidebar Width</span>
+                <span class="setting-desc">Explorer panel width (px)</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-sidebar-width" value="260" min="180" max="500" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Agent Width</span>
+                <span class="setting-desc">Agent panel width (px)</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-agent-width" value="400" min="260" max="700" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Editor -->
+        <section class="settings-section" id="sec-editor">
+          <h2 class="sec-title">Editor</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Tab Size</span>
+                <span class="setting-desc">Number of spaces per tab</span>
+              </div>
+              <select class="setting-control sm" id="s-tab-size">
+                <option value="2">2</option>
+                <option value="4" selected>4</option>
+                <option value="8">8</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Word Wrap</span>
+                <span class="setting-desc">Wrap long lines</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-word-wrap" /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Line Numbers</span>
+                <span class="setting-desc">Show line numbers in gutter</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-line-numbers" checked /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Syntax Highlighting</span>
+                <span class="setting-desc">Highlight.js code coloring</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-syntax-hl" checked /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Auto Save</span>
+                <span class="setting-desc">Save on patch apply</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-auto-save" checked /><span class="toggle-track"></span></label>
+            </div>
+          </div>
+        </section>
+
+        <!-- AI -->
+        <section class="settings-section" id="sec-ai">
+          <h2 class="sec-title">AI / Models</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>System Prompt</span>
+                <span class="setting-desc">Injected before every chat</span>
+              </div>
+            </div>
+            <textarea class="setting-textarea" id="s-system-prompt" rows="4">You are an expert coding assistant in Clarity IDE. Be concise. Use triple-backtick fences for code.</textarea>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Max Context Tokens</span>
+                <span class="setting-desc">Token budget for context injection</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-ctx-tokens" value="2000" min="256" max="32000" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Max Context Chunks</span>
+                <span class="setting-desc">Max code chunks per request</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-ctx-chunks" value="8" min="1" max="32" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Streaming</span>
+                <span class="setting-desc">Stream tokens as generated</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-streaming" checked /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Include Active File</span>
+                <span class="setting-desc">Inject open file into context</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-inject-file" checked /><span class="toggle-track"></span></label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Keybindings -->
+        <section class="settings-section" id="sec-keybindings">
+          <h2 class="sec-title">Keybindings</h2>
+          <div class="setting-group">
+            <div class="keybind-table">
+              <div class="keybind-row"><span>Command Palette</span><kbd class="kbd-sm">⌘K</kbd></div>
+              <div class="keybind-row"><span>Settings</span><kbd class="kbd-sm">⌘,</kbd></div>
+              <div class="keybind-row"><span>Ask Agent</span><kbd class="kbd-sm">⌘⇧A</kbd></div>
+              <div class="keybind-row"><span>Run Composer</span><kbd class="kbd-sm">⌘⇧P</kbd></div>
+              <div class="keybind-row"><span>Rank Context</span><kbd class="kbd-sm">⌘⇧X</kbd></div>
+              <div class="keybind-row"><span>Focus Explorer</span><kbd class="kbd-sm">⌘⇧E</kbd></div>
+              <div class="keybind-row"><span>Focus Editor</span><kbd class="kbd-sm">⌘⇧F</kbd></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Context Engine -->
+        <section class="settings-section" id="sec-context">
+          <h2 class="sec-title">Context Engine</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>BM25 Weight</span>
+                <span class="setting-desc">BM25 vs semantic score blend (0–1)</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-bm25-weight" value="0.3" min="0" max="1" step="0.05" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Chunk Token Limit</span>
+                <span class="setting-desc">Max tokens per chunk</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-chunk-tokens" value="180" min="64" max="512" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Max Files Scanned</span>
+                <span class="setting-desc">Cap file count for ranking</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-max-files" value="60" min="10" max="200" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Max Chunks per File</span>
+                <span class="setting-desc">Diversity cap per source file</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-chunks-per-file" value="3" min="1" max="10" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Providers (advanced) -->
+        <section class="settings-section" id="sec-providers">
+          <h2 class="sec-title">Providers</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Groq API Key</span>
+                <span class="setting-desc">Get free key at console.groq.com — enables cloud models</span>
+              </div>
+              <input class="setting-control" type="password" id="s-groq-api-key" placeholder="gsk_…" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>OpenRouter API Key</span>
+                <span class="setting-desc">Get free key at openrouter.ai — 50+ models including Claude, Gemini, Llama</span>
+              </div>
+              <input class="setting-control" type="password" id="s-openrouter-api-key" placeholder="sk-or-…" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>LM Studio URL</span>
+                <span class="setting-desc">OpenAI-compatible base URL</span>
+              </div>
+              <input class="setting-control" type="text" id="s-lmstudio-url" value="http://127.0.0.1:1234/v1" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Ollama URL</span>
+                <span class="setting-desc">Ollama API base URL</span>
+              </div>
+              <input class="setting-control" type="text" id="s-ollama-url" value="http://127.0.0.1:11434" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Health Poll Interval</span>
+                <span class="setting-desc">Seconds between health checks</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-health-interval" value="8" min="2" max="60" />
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Request Timeout</span>
+                <span class="setting-desc">Provider timeout in seconds</span>
+              </div>
+              <input class="setting-control sm" type="number" id="s-req-timeout" value="3" min="1" max="30" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Telemetry (advanced) -->
+        <section class="settings-section" id="sec-telemetry">
+          <h2 class="sec-title">Telemetry</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Enable Telemetry</span>
+                <span class="setting-desc">Anonymous usage analytics (local only)</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-telemetry" /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Log Level</span>
+                <span class="setting-desc">Server console verbosity</span>
+              </div>
+              <select class="setting-control sm" id="s-log-level">
+                <option value="error">Error</option>
+                <option value="warn" selected>Warn</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Experimental (advanced) -->
+        <section class="settings-section" id="sec-experimental">
+          <h2 class="sec-title">Experimental</h2>
+          <div class="setting-group">
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Vector Context</span>
+                <span class="setting-desc">Use vector embeddings for ranking (requires model)</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-vector-ctx" /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>LSP Diagnostics</span>
+                <span class="setting-desc">Weight context by error severity</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-lsp-diag" /><span class="toggle-track"></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Multi-file Compose</span>
+                <span class="setting-desc">Allow composer to patch across files</span>
+              </div>
+              <label class="toggle"><input type="checkbox" id="s-multifile" /><span class="toggle-track"></span></label>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /.settings-content -->
+    </div><!-- /.settings-body -->
+    <div class="settings-footer">
+      <button id="settings-reset" class="btn ghost sm"><i data-lucide="rotate-ccw"></i> Reset to defaults</button>
+      <button id="settings-save" class="btn primary"><i data-lucide="save"></i> Save settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LAYOUT ═════════════════════════════════════════════════════════════════ -->
+
+<!-- Scanline overlay -->
+<div class="scanlines" id="scanlines-overlay"></div>
+
+<!-- Topbar -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="brand">
+      <i data-lucide="zap" class="brand-icon"></i>
+      <span class="brand-name">CLARITY</span>
+      <span class="brand-ver">v0.1</span>
+    </div>
+    <div class="crumbs" id="breadcrumb">
+      <span class="crumb-root">workspace</span>
+      <i data-lucide="chevron-right" class="crumb-sep"></i>
+      <span class="crumb-path" id="crumb-path">—</span>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <button id="btn-palette" class="topbar-search-btn">
+      <i data-lucide="search"></i>
+      <span>Search commands &amp; files…</span>
+      <kbd class="kbd-sm">⌘K</kbd>
+    </button>
+  </div>
+  <div class="topbar-right">
+    <div id="provider-health" class="provider-health"></div>
+    <button id="btn-run-composer" class="btn primary sm">
+      <i data-lucide="play"></i>
+      <span>Compose</span>
+    </button>
+    <button id="btn-settings" class="icon-btn" title="Settings (⌘,)">
+      <i data-lucide="settings-2"></i>
+    </button>
+  </div>
+</header>
+
+<!-- Main workspace -->
+<div class="workspace">
+
+  <!-- Activity Bar -->
+  <nav class="activity-bar">
+    <button class="activity-btn active" data-panel="explorer" title="Explorer (⌘⇧E)">
+      <i data-lucide="files"></i>
+    </button>
+    <button class="activity-btn" data-panel="search" title="Search">
+      <i data-lucide="search"></i>
+    </button>
+    <button class="activity-btn" data-panel="git" title="Source Control">
+      <i data-lucide="git-branch"></i>
+    </button>
+    <div class="activity-spacer"></div>
+    <button class="activity-btn" data-panel="settings-btn" id="ab-settings" title="Settings">
+      <i data-lucide="settings-2"></i>
+    </button>
+  </nav>
+
+  <!-- Explorer Sidebar -->
+  <aside class="explorer" id="explorer-panel">
+    <div class="panel-header">
+      <span class="panel-title">EXPLORER</span>
+      <div class="panel-actions">
+        <button class="icon-btn sm" id="explorer-refresh" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+        <button class="icon-btn sm" title="Collapse all" id="explorer-collapse"><i data-lucide="chevrons-up-down"></i></button>
+      </div>
+    </div>
+    <div class="explorer-search-wrap">
+      <div class="explorer-search-row">
+        <i data-lucide="search" class="explorer-search-icon"></i>
+        <input id="explorer-search" class="explorer-search" placeholder="Filter…" autocomplete="off" spellcheck="false" />
+      </div>
+      <span class="explorer-file-count" id="explorer-count"></span>
+    </div>
+    <div id="file-tree" class="file-tree"></div>
+  </aside>
+
+  <!-- Search Panel -->
+  <aside class="explorer" id="search-panel" style="display:none">
+
+    <!-- Header -->
+    <div class="panel-header">
+      <span class="panel-title">SEARCH</span>
+      <div class="panel-actions">
+        <button class="icon-btn sm" id="search-replace-toggle" title="Toggle Replace (Ctrl+H)"><i data-lucide="replace"></i></button>
+        <button class="icon-btn sm" id="search-clear-btn" title="Clear all results"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="search-controls">
+
+      <!-- Find row -->
+      <div class="search-field-row">
+        <div class="search-field">
+          <i data-lucide="search" class="search-field-icon"></i>
+          <input id="search-query" class="search-field-input" placeholder="Search…" autocomplete="off" spellcheck="false" />
+          <div class="search-opts-inline">
+            <button class="search-opt-btn" id="sopt-case"  title="Match Case (Alt+C)">Aa</button>
+            <button class="search-opt-btn" id="sopt-word"  title="Whole Word (Alt+W)">ab</button>
+            <button class="search-opt-btn" id="sopt-regex" title="Use Regex (Alt+R)">.*</button>
+          </div>
+          <button class="search-field-clear" id="search-input-clear" title="Clear"><i data-lucide="x"></i></button>
+        </div>
+        <button class="icon-btn sm search-run-btn" id="search-run" title="Search (Enter)"><i data-lucide="corner-down-left"></i></button>
+      </div>
+
+      <!-- Replace row (hidden by default) -->
+      <div class="search-field-row" id="search-replace-row" style="display:none">
+        <div class="search-field">
+          <i data-lucide="pencil" class="search-field-icon"></i>
+          <input id="search-replace" class="search-field-input" placeholder="Replace…" autocomplete="off" spellcheck="false" />
+        </div>
+        <button class="icon-btn sm" id="search-replace-all-btn" title="Replace All"><i data-lucide="replace-all"></i></button>
+      </div>
+
+      <!-- Glob filter rows -->
+      <div class="search-filter-group">
+        <label class="search-filter-label">
+          <i data-lucide="folder-check"></i>
+          <input id="search-include" class="search-filter-input" placeholder="Include (e.g. src, *.ts)" autocomplete="off" />
+        </label>
+        <label class="search-filter-label">
+          <i data-lucide="folder-x"></i>
+          <input id="search-exclude" class="search-filter-input" placeholder="Exclude (e.g. dist, node_modules)" autocomplete="off" />
+        </label>
+      </div>
+
+    </div>
+
+    <!-- Results toolbar -->
+    <div class="search-toolbar" id="search-toolbar" style="display:none">
+      <span class="search-meta-text" id="search-meta"></span>
+      <div class="search-toolbar-actions">
+        <button class="icon-btn xs" id="search-expand-all"   title="Expand all"><i data-lucide="chevrons-down"></i></button>
+        <button class="icon-btn xs" id="search-collapse-all" title="Collapse all"><i data-lucide="chevrons-up"></i></button>
+      </div>
+    </div>
+
+    <!-- Loading indicator -->
+    <div class="search-loading" id="search-loading" style="display:none">
+      <i data-lucide="loader-2" class="spin"></i>
+      <span>Searching…</span>
+    </div>
+
+    <!-- Results -->
+    <div id="search-results" class="search-results"></div>
+
+  </aside>
+
+  <!-- Git / Source Control Panel -->
+  <aside class="explorer" id="git-panel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-title">SOURCE CONTROL</span>
+      <div class="panel-actions">
+        <button class="icon-btn sm" id="git-pull-btn" title="Pull"><i data-lucide="arrow-down-to-line"></i></button>
+        <button class="icon-btn sm" id="git-push-btn" title="Push"><i data-lucide="arrow-up-from-line"></i></button>
+        <button class="icon-btn sm" id="git-refresh-btn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+      </div>
+    </div>
+    <!-- No-repo empty state -->
+    <div id="git-no-repo" class="git-no-repo" style="display:none">
+      <p class="git-no-repo-text">The folder currently open doesn't have a Git repository. You can initialize a repository which will enable source control features powered by Git.</p>
+      <button id="git-init-btn" class="btn git-action-btn"><i data-lucide="git-branch"></i> Initialize Repository</button>
+      <div class="git-no-repo-divider"></div>
+      <p class="git-no-repo-text">You can directly publish this folder to a GitHub repository. Once published, you'll have access to source control features powered by Git and GitHub.</p>
+      <button id="git-publish-btn" class="btn git-action-btn git-action-btn-outline"><i data-lucide="github"></i> Publish to GitHub</button>
+    </div>
+
+    <!-- Branch + sync info + switcher -->
+    <!-- Git extra actions: fetch + stash -->
+    <div class="git-extra-actions" id="git-extra-actions">
+      <button class="btn ghost xs" id="git-fetch-btn" title="git fetch --prune"><i data-lucide="download-cloud"></i> Fetch</button>
+      <button class="btn ghost xs" id="git-stash-btn" title="Stash changes"><i data-lucide="archive"></i> Stash</button>
+      <button class="btn ghost xs" id="git-stash-pop-btn" title="Pop stash"><i data-lucide="archive-restore"></i> Pop</button>
+    </div>
+    <div class="git-branch-row" id="git-branch-row">
+      <i data-lucide="git-branch"></i>
+      <button class="git-branch-btn" id="git-branch-btn" title="Switch branch">
+        <span id="git-branch-name">—</span>
+        <i data-lucide="chevrons-up-down" style="width:11px;height:11px;"></i>
+      </button>
+      <span class="git-sync-badge" id="git-sync-badge"></span>
+    </div>
+    <!-- Branch switcher dropdown -->
+    <div id="git-branch-dropdown" class="git-branch-dropdown" style="display:none">
+      <div class="git-branch-search-row">
+        <i data-lucide="search"></i>
+        <input id="git-branch-search" class="git-branch-search" placeholder="Filter or create branch…" autocomplete="off" />
+      </div>
+      <ul id="git-branch-list" class="git-branch-list"></ul>
+    </div>
+    <!-- Commit box -->
+    <div class="git-commit-box">
+      <textarea id="git-commit-msg" class="git-commit-textarea" rows="2" placeholder="Commit message…"></textarea>
+      <div class="git-commit-actions">
+        <button id="git-ai-commit-msg-btn" class="btn ghost xs" title="Generate commit message from staged diff (AI)"><i data-lucide="sparkles"></i> AI Message</button>
+        <button id="git-commit-btn" class="btn primary sm"><i data-lucide="check"></i> Commit staged</button>
+      </div>
+    </div>
+    <!-- Staged -->
+    <div class="git-section-head" id="git-staged-head">
+      <i data-lucide="chevron-down" class="git-toggle-icon"></i>
+      <span>STAGED</span>
+      <span class="git-count" id="git-staged-count">0</span>
+      <button class="icon-btn xs" id="git-unstage-all" title="Unstage all"><i data-lucide="minus-circle"></i></button>
+    </div>
+    <div id="git-staged-list" class="git-file-list"></div>
+    <!-- Changes -->
+    <div class="git-section-head" id="git-changes-head">
+      <i data-lucide="chevron-down" class="git-toggle-icon"></i>
+      <span>CHANGES</span>
+      <span class="git-count" id="git-changes-count">0</span>
+      <button class="icon-btn xs" id="git-stage-all" title="Stage all"><i data-lucide="plus-circle"></i></button>
+      <button class="icon-btn xs" id="git-discard-all" title="Discard all tracked changes"><i data-lucide="trash-2"></i></button>
+    </div>
+    <div id="git-changes-list" class="git-file-list"></div>
+    <!-- Untracked -->
+    <div class="git-section-head" id="git-untracked-head">
+      <i data-lucide="chevron-down" class="git-toggle-icon"></i>
+      <span>UNTRACKED</span>
+      <span class="git-count" id="git-untracked-count">0</span>
+      <button class="icon-btn xs" id="git-stage-untracked" title="Stage all untracked"><i data-lucide="plus-circle"></i></button>
+    </div>
+    <div id="git-untracked-list" class="git-file-list"></div>
+    <!-- Diff viewer -->
+    <div id="git-diff-view" class="git-diff-view"></div>
+    <!-- Log -->
+    <div class="git-section-head" id="git-log-head">
+      <i data-lucide="chevron-down" class="git-toggle-icon"></i>
+      <span>COMMITS</span>
+    </div>
+    <div id="git-log-list" class="git-log-list"></div>
+  </aside>
+
+  <div id="split-left" class="splitter vertical"></div>
+
+  <!-- Editor -->
+  <main class="editor-area">
+    <div class="editor-tabs-bar">
+      <div class="editor-tabs" id="editor-tabs">
+        <!-- tabs injected by JS -->
+      </div>
+      <div class="editor-actions">
+        <button id="action-ask" class="icon-btn sm" title="Ask Agent (⌘⇧A)"><i data-lucide="message-square"></i></button>
+        <button id="action-compose" class="icon-btn sm" title="Compose Fix (⌘⇧P)"><i data-lucide="wand-2"></i></button>
+      </div>
+    </div>
+    <!-- In-editor find/replace bar -->
+    <div id="editor-find-bar" class="editor-find-bar" style="display:none">
+      <div class="find-bar-row">
+        <div class="find-bar-field">
+          <input id="find-input" class="find-bar-input" placeholder="Find…" autocomplete="off" spellcheck="false" />
+          <button class="find-bar-opt" id="find-opt-case" title="Match Case (Alt+C)">Aa</button>
+          <button class="find-bar-opt" id="find-opt-word" title="Whole Word (Alt+W)">ab</button>
+          <button class="find-bar-opt" id="find-opt-regex" title="Regex (Alt+R)">.*</button>
+          <span class="find-bar-count" id="find-count"></span>
+          <button class="find-bar-nav" id="find-prev" title="Previous (Shift+F3)"><i data-lucide="chevron-up"></i></button>
+          <button class="find-bar-nav" id="find-next" title="Next (F3)"><i data-lucide="chevron-down"></i></button>
+          <button class="find-bar-close" id="find-close"><i data-lucide="x"></i></button>
+        </div>
+        <div class="find-bar-field" id="find-replace-field" style="display:none">
+          <input id="replace-input" class="find-bar-input" placeholder="Replace…" autocomplete="off" spellcheck="false" />
+          <button class="find-bar-btn" id="replace-one">Replace</button>
+          <button class="find-bar-btn" id="replace-all">All</button>
+        </div>
+      </div>
+    </div>
+    <div class="editor-container">
+      <!-- Welcome screen -->
+      <div id="editor-welcome" class="editor-welcome">
+        <div class="welcome-logo"><i data-lucide="cpu"></i></div>
+        <h2 class="welcome-title">Clarity IDE</h2>
+        <p class="welcome-sub">Open a file from the Explorer or use the Command Palette</p>
+        <div class="welcome-actions">
+          <button class="welcome-btn" id="welcome-open-palette"><i data-lucide="terminal"></i>Command Palette <kbd>Ctrl+K</kbd></button>
+          <button class="welcome-btn" id="welcome-open-search"><i data-lucide="search"></i>Search Files <kbd>Ctrl+Shift+F</kbd></button>
+        </div>
+        <div class="welcome-recent" id="welcome-recent"></div>
+      </div>
+      <div class="line-numbers" id="line-numbers"></div>
+      <div class="editor-layer-wrap">
+        <pre  id="editor-highlight" class="editor editor-highlight" aria-hidden="true"></pre>
+        <textarea id="editor-content" class="editor editor-textarea" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
+      </div>
+    </div>
+    <footer class="statusbar">
+      <div class="status-left">
+        <div class="status-item accent" id="status-branch"><i data-lucide="git-branch"></i><span>main</span></div>
+        <div class="status-item"><i data-lucide="code-2"></i><span id="status-lang">—</span></div>
+      </div>
+      <div class="status-right">
+        <div class="status-item"><span id="status-file">—</span></div>
+        <div class="status-item"><span id="status-lines">—</span></div>
+        <div class="status-item dim"><i data-lucide="cpu"></i><span id="status-model">No model</span></div>
+      </div>
+    </footer>
+  </main>
+
+  <div id="split-right" class="splitter vertical"></div>
+
+  <!-- Agent Panel -->
+  <aside class="agent">
+
+    <!-- ── Header ─────────────────────────────────────────────── -->
+    <div class="agent-head">
+      <div class="agent-head-top">
+        <div class="agent-brand">
+          <div class="agent-brand-icon"><i data-lucide="bot"></i></div>
+          <span class="agent-brand-name">CLARITY</span>
+          <span class="agent-brand-sub">AI</span>
+        </div>
+        <div class="agent-head-actions">
+          <button class="icon-btn sm" id="btn-new-session" title="New session"><i data-lucide="plus"></i></button>
+          <button class="icon-btn sm" id="btn-session-history" title="History"><i data-lucide="clock-4"></i></button>
+        </div>
+      </div>
+
+      <!-- Model selector -->
+      <div class="model-selector-wrap" id="model-selector-wrap" title="Switch model">
+        <div class="model-sel-left">
+          <div class="model-sel-dot" id="model-sel-dot"></div>
+          <div class="model-sel-info">
+            <span class="model-sel-name" id="active-model-name">No model selected</span>
+            <span class="model-sel-provider" id="active-model-provider">— select a model →</span>
+          </div>
+        </div>
+        <i data-lucide="chevrons-up-down" class="model-chevron"></i>
+      </div>
+
+      <!-- Token meter strip -->
+      <div class="token-meter">
+        <div class="token-meter-track">
+          <div class="token-meter-fill ok" id="token-meter-bar" style="width:0%"></div>
+        </div>
+        <span class="token-meter-label" id="token-meter-label">0 / — tokens</span>
+        <span class="ctx-inject-badge" id="ctx-inject-count" title="Auto-injected context chunks"></span>
+      </div>
+    </div>
+
+    <!-- ── File Tree Panel ───────────────────────────────────── -->
+    <div class="agent-files" id="agent-files">
+      <div class="agent-files-head" id="agent-files-toggle">
+        <div class="agent-files-title">
+          <i data-lucide="folder-tree"></i>
+          <span>FILES</span>
+        </div>
+        <div class="agent-files-actions">
+          <span class="agent-files-root-label" id="agent-files-root">workspace</span>
+          <i data-lucide="chevron-down" class="agent-files-chevron" id="agent-files-chevron"></i>
+        </div>
+      </div>
+      <div class="agent-files-body" id="agent-files-body">
+        <div class="agent-files-search-row">
+          <i data-lucide="search" class="agent-files-search-icon"></i>
+          <input id="agent-files-search" class="agent-files-search" placeholder="Filter files…" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="agent-file-tree" class="agent-file-tree"></div>
+      </div>
+    </div>
+
+    <!-- ── Tabs ───────────────────────────────────────────────── -->
+    <div class="agent-tabs">
+      <button class="agent-tab active" data-agent-view="chat">
+        <i data-lucide="message-circle"></i><span>Chat</span>
+      </button>
+      <button class="agent-tab" data-agent-view="composer">
+        <i data-lucide="wand-2"></i><span>Compose</span>
+      </button>
+      <button class="agent-tab" data-agent-view="context">
+        <i data-lucide="layers"></i><span>Context</span>
+      </button>
+      <button class="agent-tab" data-agent-view="models">
+        <i data-lucide="cpu"></i><span>Models</span>
+      </button>
+    </div>
+
+    <!-- ── Session Drawer ─────────────────────────────────────── -->
+    <div id="session-drawer" class="session-drawer">
+      <div class="session-drawer-head">
+        <div class="session-drawer-title">
+          <i data-lucide="clock-4"></i>
+          <span>CHAT HISTORY</span>
+        </div>
+        <button id="session-drawer-close" class="icon-btn sm"><i data-lucide="x"></i></button>
+      </div>
+      <div id="session-list" class="session-list"></div>
+      <div class="session-drawer-footer">
+        <button id="btn-new-session-drawer" class="btn ghost full sm">
+          <i data-lucide="plus"></i> New Session
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CHAT VIEW
+    ══════════════════════════════════════════════════════════ -->
+    <section id="chat" class="agent-view active">
+      <div id="chat-log" class="log"></div>
+
+      <!-- Chat toolbar -->
+      <div class="chat-toolbar">
+        <div class="chat-toolbar-left">
+          <button id="btn-attach-file" class="icon-btn xs" title="Attach current file context"><i data-lucide="paperclip"></i></button>
+          <button id="btn-compress" class="icon-btn xs" title="Compress history to summary"><i data-lucide="archive"></i></button>
+          <button id="btn-send-errors" class="icon-btn xs" title="Send console errors to model"><i data-lucide="alert-triangle"></i></button>
+        </div>
+        <div class="chat-toolbar-right">
+          <button id="btn-export-session" class="icon-btn xs" title="Export session as Markdown"><i data-lucide="download"></i></button>
+          <button id="btn-stop-chat" class="chat-stop-btn" title="Stop generation" style="display:none"><i data-lucide="square"></i></button>
+          <button id="btn-clear-chat" class="icon-btn xs" title="Clear chat log"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+
+      <!-- Slash command autocomplete -->
+      <div id="slash-popup" class="slash-popup" style="display:none"></div>
+
+      <!-- Attached file chip -->
+      <div id="chat-attach-strip" class="chat-attach-strip" style="display:none">
+        <i data-lucide="file-code"></i>
+        <span id="chat-attach-label">—</span>
+        <button id="chat-attach-remove" class="icon-btn xs"><i data-lucide="x"></i></button>
+      </div>
+
+      <!-- Input area -->
+      <form id="chat-form" class="chat-input-area">
+        <textarea id="chat-input" class="chat-textarea" placeholder="Ask anything… (↵ send · ⇧↵ newline)" rows="3" autocomplete="off" spellcheck="false"></textarea>
+        <div class="chat-input-footer">
+          <span class="chat-input-hint">↵ send · ⇧↵ newline</span>
+          <button type="submit" class="btn-send" id="btn-send"><i data-lucide="arrow-up"></i></button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         COMPOSER VIEW
+    ══════════════════════════════════════════════════════════ -->
+    <section id="composer" class="agent-view">
+      <div class="composer-container">
+
+        <!-- Mode selector -->
+        <div class="composer-mode-row">
+          <button class="composer-mode-btn active" data-mode="patch"><i data-lucide="git-pull-request"></i> Patch</button>
+          <button class="composer-mode-btn" data-mode="rewrite"><i data-lucide="refresh-ccw"></i> Rewrite</button>
+          <button class="composer-mode-btn" data-mode="explain"><i data-lucide="lightbulb"></i> Explain</button>
+        </div>
+
+        <!-- Target file badge -->
+        <div class="composer-file-badge" id="composer-file-badge">
+          <i data-lucide="file-code" class="composer-file-icon"></i>
+          <div class="composer-file-info">
+            <span class="composer-file-name" id="composer-file-name">No file open</span>
+            <span class="composer-file-hint">Active editor file</span>
+          </div>
+          <span class="composer-file-lang" id="composer-file-lang"></span>
+        </div>
+
+        <!-- Instruction -->
+        <div class="composer-instruction-wrap">
+          <label class="composer-label">Instruction</label>
+          <textarea id="composer-request" class="composer-textarea" rows="5"
+            placeholder="Describe the change you want…&#10;&#10;e.g. Add error handling to the fetchUser function and return null on failure"></textarea>
+        </div>
+
+        <!-- Options row -->
+        <div class="composer-opts-row">
+          <label class="composer-opt-check"><input type="checkbox" id="opt-include-ctx" checked /> <span>Include context chunks</span></label>
+          <label class="composer-opt-check"><input type="checkbox" id="opt-strict-diff" /> <span>Strict unified diff</span></label>
+        </div>
+
+        <button id="composer-generate" class="btn primary full composer-gen-btn">
+          <i data-lucide="sparkles"></i>
+          <span id="composer-gen-label">Generate Patch</span>
+        </button>
+
+        <!-- Diff output -->
+        <div class="composer-diff-wrap" id="composer-diff-wrap" style="display:none">
+          <div class="composer-diff-head">
+            <span class="composer-diff-title"><i data-lucide="git-diff"></i> Diff Preview</span>
+            <div class="composer-diff-actions">
+              <button id="patch-apply" class="btn primary sm"><i data-lucide="check"></i> Apply</button>
+              <button id="patch-discard" class="btn ghost sm"><i data-lucide="x"></i> Discard</button>
+            </div>
+          </div>
+          <div id="composer-diff" class="composer-diff"></div>
+        </div>
+
+        <!-- Hidden old patch-actions kept for JS compat -->
+        <div id="patch-actions" style="display:none"></div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         CONTEXT VIEW
+    ══════════════════════════════════════════════════════════ -->
+    <section id="context" class="agent-view">
+      <!-- Gauge strip -->
+      <div class="ctx-gauge-strip">
+        <div class="ctx-gauge-ring-wrap">
+          <svg class="ctx-gauge-ring" viewBox="0 0 40 40">
+            <circle class="ctx-ring-bg"    cx="20" cy="20" r="16" />
+            <circle class="ctx-ring-fill"  cx="20" cy="20" r="16" id="ctx-ring-fill" />
+          </svg>
+          <span class="ctx-gauge-pct" id="ctx-gauge-pct">0%</span>
+        </div>
+        <div class="ctx-gauge-info">
+          <span class="ctx-gauge-label">Context budget</span>
+          <span class="ctx-gauge-detail" id="ctx-gauge-detail">0 / 2000 tokens</span>
+          <span class="ctx-gauge-chunks" id="ctx-gauge-chunks">0 chunks injected</span>
+        </div>
+        <button id="ctx-inject-all" class="btn ghost xs ctx-inject-all-btn" title="Inject all ranked chunks into chat">
+          <i data-lucide="zap"></i> Inject all
+        </button>
+      </div>
+
+      <!-- Controls -->
+      <div class="context-controls">
+        <div class="ctx-query-wrap">
+          <i data-lucide="search" class="ctx-query-icon"></i>
+          <input id="ctx-query" class="ctx-query-input" placeholder="BM25 query — leave blank for file-based ranking" />
+        </div>
+        <div class="ctx-params-row">
+          <div class="ctx-param">
+            <label>Tokens</label>
+            <input id="ctx-max-tokens" class="ctx-param-input" type="number" value="2000" min="100" max="32000" />
+          </div>
+          <div class="ctx-param">
+            <label>Chunks</label>
+            <input id="ctx-max-chunks" class="ctx-param-input" type="number" value="8" min="1" max="32" />
+          </div>
+          <div class="ctx-param">
+            <label>Per file</label>
+            <input id="ctx-chunks-per-file" class="ctx-param-input" type="number" value="3" min="1" max="10" />
+          </div>
+        </div>
+        <button id="ctx-rank" class="btn primary full">
+          <i data-lucide="sparkles"></i>
+          <span>Rank Context</span>
+        </button>
+      </div>
+
+      <div id="ctx-result" class="results-area"></div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         MODELS VIEW
+    ══════════════════════════════════════════════════════════ -->
+    <section id="models" class="agent-view">
+      <div class="models-toolbar">
+        <div class="models-search-wrap">
+          <i data-lucide="search"></i>
+          <input id="models-search" class="models-search-input" placeholder="Filter models…" />
+        </div>
+        <button id="models-refresh" class="icon-btn sm" title="Refresh model list"><i data-lucide="refresh-cw"></i></button>
+      </div>
+
+      <!-- Provider health strip -->
+      <div class="provider-health-strip" id="provider-health-strip">
+        <div class="provider-pill" id="ph-lmstudio">
+          <span class="ph-dot"></span><span>LM Studio</span>
+        </div>
+        <div class="provider-pill" id="ph-ollama">
+          <span class="ph-dot"></span><span>Ollama</span>
+        </div>
+        <div class="provider-pill" id="ph-groq">
+          <span class="ph-dot"></span><span>Groq</span>
+        </div>
+      </div>
+
+      <ul id="model-list" class="model-list"></ul>
+    </section>
+
+  </aside>
+
+<!-- ══ TERMINAL PANEL ═══════════════════════════════════════════════════════ -->
+<div id="terminal-panel" class="terminal-panel" style="display:none">
+  <div class="terminal-panel-header">
+    <div class="terminal-tabs" id="terminal-tabs">
+      <!-- tab chips injected by JS -->
+    </div>
+    <div class="terminal-header-actions">
+      <button class="icon-btn xs" id="terminal-new-tab" title="New terminal"><i data-lucide="plus"></i></button>
+      <button class="icon-btn xs" id="terminal-clear" title="Clear terminal (Ctrl+L)"><i data-lucide="eraser"></i></button>
+      <button class="icon-btn xs" id="terminal-close" title="Hide terminal (Ctrl+`)"><i data-lucide="chevron-down"></i></button>
+    </div>
+  </div>
+  <div id="terminal-body" class="terminal-body"></div>
+</div>
+
+</div><!-- /.workspace -->
+
+<script>window.hljs = window.hljs || {};</script>
+<script type="module" src="/dist/apps/webview/src/ui.js"></script>
+</body>
+</html>

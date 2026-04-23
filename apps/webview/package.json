@@ -1,0 +1,13 @@
+{
+  "name": "@clarity/webview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/demo.js",
+  "types": "dist/demo.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "serve": "node ./server.mjs"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "@clarity/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Clarity IDE — Electron desktop shell",
+  "main": "main.js",
+  "scripts": {
+    "dev":   "electron .",
+    "build": "electron-builder --dir",
+    "dist":  "electron-builder",
+    "pack":  "electron-builder --dir"
+  },
+  "build": {
+    "appId": "dev.clarity.ide",
+    "productName": "Clarity IDE",
+    "copyright": "Copyright © 2025 Clarity IDE Contributors",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "../../apps/webview/server.mjs",
+      "../../apps/webview/index.html",
+      "../../apps/webview/src/**/*",
+      "../../apps/webview/dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../../apps/webview",
+        "to": "webview",
+        "filter": ["server.mjs", "index.html", "src/**", "dist/**"]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "darkModeSupport": true
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  }
+}
