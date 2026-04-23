@@ -17,6 +17,31 @@
 </head>
 <body>
 
+<!-- ══ CUSTOM TITLEBAR (Electron desktop only) ═══════════════════════════════ -->
+<div id="clarity-titlebar" style="display:none">
+  <div class="tb-drag"></div>
+  <div class="tb-left">
+    <span class="tb-icon">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </span>
+    <span class="tb-title">Clarity</span>
+  </div>
+  <div class="tb-center">
+    <span class="tb-workspace" id="tb-workspace-label">—</span>
+  </div>
+  <div class="tb-right">
+    <button class="tb-btn" id="tb-minimize" title="Minimize">
+      <svg width="11" height="11" viewBox="0 0 12 12"><rect x="1" y="5.5" width="10" height="1.2" rx="0.6" fill="currentColor"/></svg>
+    </button>
+    <button class="tb-btn" id="tb-maximize" title="Maximize">
+      <svg width="11" height="11" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+    <button class="tb-btn tb-btn-close" id="tb-close" title="Close">
+      <svg width="11" height="11" viewBox="0 0 12 12"><line x1="1.5" y1="1.5" x2="10.5" y2="10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="10.5" y1="1.5" x2="1.5" y2="10.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</div>
+
 <!-- ══ OVERLAYS ══════════════════════════════════════════════════════════════ -->
 
 <!-- Toast notification container -->
@@ -425,19 +450,95 @@
 <!-- Scanline overlay -->
 <div class="scanlines" id="scanlines-overlay"></div>
 
-<!-- Topbar -->
-<header class="topbar">
+<!-- Unified Topbar with Menu -->
+<header class="topbar" id="main-topbar">
   <div class="topbar-left">
     <div class="brand">
       <i data-lucide="zap" class="brand-icon"></i>
       <span class="brand-name">CLARITY</span>
-      <span class="brand-ver">v0.1</span>
     </div>
-    <div class="crumbs" id="breadcrumb">
-      <span class="crumb-root">workspace</span>
-      <i data-lucide="chevron-right" class="crumb-sep"></i>
-      <span class="crumb-path" id="crumb-path">—</span>
-    </div>
+    <!-- Menu Bar integrated into topbar -->
+    <nav class="menubar-inline" id="menubar">
+      <div class="menu-item" data-menu="file"><span>File</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="new-file"><kbd>Ctrl+N</kbd>New File</div>
+          <div class="menu-option" data-action="new-window"><kbd>Ctrl+Shift+N</kbd>New Window</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="open-folder"><kbd>Ctrl+O</kbd>Open Folder…</div>
+          <div class="menu-option" data-action="open-file"><kbd>Ctrl+Shift+O</kbd>Open File…</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="save"><kbd>Ctrl+S</kbd>Save</div>
+          <div class="menu-option" data-action="save-all"><kbd>Ctrl+Shift+S</kbd>Save All</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="close-file"><kbd>Ctrl+W</kbd>Close File</div>
+          <div class="menu-option" data-action="quit">Quit</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="edit"><span>Edit</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="undo">Undo</div>
+          <div class="menu-option" data-action="redo">Redo</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="cut">Cut</div>
+          <div class="menu-option" data-action="copy">Copy</div>
+          <div class="menu-option" data-action="paste">Paste</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="find"><kbd>Ctrl+F</kbd>Find</div>
+          <div class="menu-option" data-action="find-replace"><kbd>Ctrl+H</kbd>Find &amp; Replace</div>
+          <div class="menu-option" data-action="goto-line"><kbd>Ctrl+G</kbd>Go to Line</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="selection"><span>Selection</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="select-all"><kbd>Ctrl+A</kbd>Select All</div>
+          <div class="menu-option" data-action="select-line"><kbd>Ctrl+L</kbd>Select Line</div>
+          <div class="menu-option" data-action="select-word"><kbd>Ctrl+D</kbd>Select Word</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="view"><span>View</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="command-palette"><kbd>Ctrl+Shift+P</kbd>Command Palette</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="toggle-explorer"><kbd>Ctrl+Shift+E</kbd>Explorer</div>
+          <div class="menu-option" data-action="toggle-search"><kbd>Ctrl+Shift+F</kbd>Search</div>
+          <div class="menu-option" data-action="toggle-git"><kbd>Ctrl+Shift+G</kbd>Source Control</div>
+          <div class="menu-option" data-action="toggle-chat"><kbd>Ctrl+Shift+A</kbd>AI Chat</div>
+          <div class="menu-option" data-action="toggle-terminal"><kbd>Ctrl+`</kbd>Terminal</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="go"><span>Go</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="goto-file"><kbd>Ctrl+P</kbd>Go to File…</div>
+          <div class="menu-option" data-action="goto-symbol"><kbd>Ctrl+Shift+O</kbd>Go to Symbol…</div>
+          <div class="menu-option" data-action="goto-line"><kbd>Ctrl+G</kbd>Go to Line</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="run"><span>Run</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="debug-start"><kbd>F5</kbd>Debug</div>
+          <div class="menu-option" data-action="run"><kbd>Ctrl+F5</kbd>Run</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="ai-explain">AI: Explain</div>
+          <div class="menu-option" data-action="ai-fix">AI: Fix</div>
+          <div class="menu-option" data-action="composer">Composer</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="terminal"><span>Terminal</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="new-terminal"><kbd>Ctrl+Shift+`</kbd>New Terminal</div>
+          <div class="menu-option" data-action="focus-terminal"><kbd>Ctrl+`</kbd>Focus</div>
+          <div class="menu-option" data-action="clear-terminal">Clear</div>
+        </div>
+      </div>
+      <div class="menu-item" data-menu="help"><span>Help</span>
+        <div class="menu-dropdown">
+          <div class="menu-option" data-action="welcome">Welcome</div>
+          <div class="menu-option" data-action="show-commands">All Commands</div>
+          <div class="menu-sep"></div>
+          <div class="menu-option" data-action="about">About</div>
+        </div>
+      </div>
+    </nav>
   </div>
   <div class="topbar-center">
     <button id="btn-palette" class="topbar-search-btn">
@@ -455,6 +556,12 @@
     <button id="btn-settings" class="icon-btn" title="Settings (⌘,)">
       <i data-lucide="settings-2"></i>
     </button>
+    <!-- Window controls for frameless window -->
+    <div class="window-controls" id="window-controls">
+      <button class="window-btn minimize" id="win-minimize" title="Minimize"><i data-lucide="minus"></i></button>
+      <button class="window-btn maximize" id="win-maximize" title="Maximize"><i data-lucide="square"></i></button>
+      <button class="window-btn close" id="win-close" title="Close"><i data-lucide="x"></i></button>
+    </div>
   </div>
 </header>
 
@@ -485,6 +592,7 @@
       <div class="panel-actions">
         <button class="icon-btn sm" id="explorer-refresh" title="Refresh"><i data-lucide="refresh-cw"></i></button>
         <button class="icon-btn sm" title="Collapse all" id="explorer-collapse"><i data-lucide="chevrons-up-down"></i></button>
+        <button class="icon-btn sm panel-more-btn" data-panel="explorer" title="More options"><i data-lucide="more-vertical"></i></button>
       </div>
     </div>
     <div class="explorer-search-wrap">
@@ -506,6 +614,7 @@
       <div class="panel-actions">
         <button class="icon-btn sm" id="search-replace-toggle" title="Toggle Replace (Ctrl+H)"><i data-lucide="replace"></i></button>
         <button class="icon-btn sm" id="search-clear-btn" title="Clear all results"><i data-lucide="x"></i></button>
+        <button class="icon-btn sm panel-more-btn" data-panel="search" title="More options"><i data-lucide="more-vertical"></i></button>
       </div>
     </div>
 
@@ -576,8 +685,9 @@
       <span class="panel-title">SOURCE CONTROL</span>
       <div class="panel-actions">
         <button class="icon-btn sm" id="git-pull-btn" title="Pull"><i data-lucide="arrow-down-to-line"></i></button>
-        <button class="icon-btn sm" id="git-push-btn" title="Push"><i data-lucide="arrow-up-from-line"></i></button>
-        <button class="icon-btn sm" id="git-refresh-btn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+        <button class="icon-btn sm" id="git-push-btn" title="Push"><i data-lucide="arrow-up-to-line"></i></button>
+        <button class="icon-btn sm" id="git-fetch-btn" title="Fetch"><i data-lucide="download-cloud"></i></button>
+        <button class="icon-btn sm panel-more-btn" data-panel="git" title="More options"><i data-lucide="more-vertical"></i></button>
       </div>
     </div>
     <!-- No-repo empty state -->
@@ -700,10 +810,15 @@
         </div>
         <div class="welcome-recent" id="welcome-recent"></div>
       </div>
-      <div class="line-numbers" id="line-numbers"></div>
-      <div class="editor-layer-wrap">
-        <pre  id="editor-highlight" class="editor editor-highlight" aria-hidden="true"></pre>
-        <textarea id="editor-content" class="editor editor-textarea" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
+      <!-- Editor Area -->
+      <div class="editor-scroll-area" id="editor-scroll-area">
+        <div class="line-numbers" id="line-numbers">1</div>
+        <div class="editor-content-wrap">
+          <div class="editor-layer-wrap" id="editor-layer-wrap">
+            <pre id="editor-highlight" class="editor editor-highlight" aria-hidden="true"><code></code></pre>
+            <textarea id="editor-content" class="editor editor-textarea" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
+          </div>
+        </div>
       </div>
     </div>
     <footer class="statusbar">
@@ -993,6 +1108,62 @@
     </section>
 
   </aside>
+
+<!-- ══ PANEL OPTIONS DROPDOWNS ══════════════════════════════════════════════ -->
+<div class="panel-dropdown" id="panel-dropdown-explorer" style="display:none">
+  <div class="panel-dropdown-item" data-action="refresh"><i data-lucide="refresh-cw"></i> Refresh</div>
+  <div class="panel-dropdown-item" data-action="collapse"><i data-lucide="chevrons-up-down"></i> Collapse All</div>
+  <div class="panel-dropdown-item" data-action="new-file"><i data-lucide="file-plus"></i> New File</div>
+  <div class="panel-dropdown-item" data-action="new-folder"><i data-lucide="folder-plus"></i> New Folder</div>
+  <div class="panel-dropdown-sep"></div>
+  <div class="panel-dropdown-item" data-action="undock"><i data-lucide="square-arrow-out-up-right"></i> Undock Panel</div>
+  <div class="panel-dropdown-item" data-action="move-right"><i data-lucide="panel-right"></i> Move Right</div>
+  <div class="panel-dropdown-item" data-action="hide"><i data-lucide="x"></i> Hide Panel</div>
+</div>
+
+<div class="panel-dropdown" id="panel-dropdown-search" style="display:none">
+  <div class="panel-dropdown-item" data-action="toggle-replace"><i data-lucide="replace"></i> Toggle Replace</div>
+  <div class="panel-dropdown-item" data-action="clear"><i data-lucide="trash-2"></i> Clear Results</div>
+  <div class="panel-dropdown-sep"></div>
+  <div class="panel-dropdown-item" data-action="case-sensitive"><i data-lucide="case-sensitive"></i> Case Sensitive</div>
+  <div class="panel-dropdown-item" data-action="whole-word"><i data-lucide="whole-word"></i> Whole Word</div>
+  <div class="panel-dropdown-item" data-action="regex"><i data-lucide="regex"></i> Use Regular Expressions</div>
+  <div class="panel-dropdown-sep"></div>
+  <div class="panel-dropdown-item" data-action="undock"><i data-lucide="square-arrow-out-up-right"></i> Undock Panel</div>
+  <div class="panel-dropdown-item" data-action="move-right"><i data-lucide="panel-right"></i> Move Right</div>
+  <div class="panel-dropdown-item" data-action="hide"><i data-lucide="x"></i> Hide Panel</div>
+</div>
+
+<div class="panel-dropdown" id="panel-dropdown-git" style="display:none">
+  <div class="panel-dropdown-item" data-action="pull"><i data-lucide="arrow-down-to-line"></i> Pull</div>
+  <div class="panel-dropdown-item" data-action="push"><i data-lucide="arrow-up-to-line"></i> Push</div>
+  <div class="panel-dropdown-item" data-action="fetch"><i data-lucide="download-cloud"></i> Fetch</div>
+  <div class="panel-dropdown-sep"></div>
+  <div class="panel-dropdown-item" data-action="stash"><i data-lucide="archive"></i> Stash</div>
+  <div class="panel-dropdown-item" data-action="stash-pop"><i data-lucide="archive-restore"></i> Pop Stash</div>
+  <div class="panel-dropdown-sep"></div>
+  <div class="panel-dropdown-item" data-action="undock"><i data-lucide="square-arrow-out-up-right"></i> Undock Panel</div>
+  <div class="panel-dropdown-item" data-action="move-right"><i data-lucide="panel-right"></i> Move Right</div>
+  <div class="panel-dropdown-item" data-action="hide"><i data-lucide="x"></i> Hide Panel</div>
+</div>
+
+<!-- ══ FLOATING PANELS CONTAINER ════════════════════════════════════════════ -->
+<div id="floating-panels-container" class="floating-panels-container"></div>
+
+<!-- ══ UNDOCKED PANEL TEMPLATE ════════════════════════════════════════════════ -->
+<template id="floating-panel-template">
+  <div class="floating-panel">
+    <div class="floating-panel-header">
+      <span class="floating-panel-title"></span>
+      <div class="floating-panel-actions">
+        <button class="icon-btn xs dock-btn" title="Dock panel"><i data-lucide="panel-left"></i></button>
+        <button class="icon-btn xs close-btn" title="Close"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div class="floating-panel-content"></div>
+    <div class="floating-panel-resize-handle"></div>
+  </div>
+</template>
 
 <!-- ══ TERMINAL PANEL ═══════════════════════════════════════════════════════ -->
 <div id="terminal-panel" class="terminal-panel" style="display:none">

@@ -741,8 +741,13 @@ function getEditorEls(): { ta: HTMLTextAreaElement | null; hi: HTMLElement | nul
 
 function syncHighlight(): void {
   const { ta, hi } = getEditorEls(); if (!ta || !hi) return;
-  // Append a trailing newline so the pre renders same height as textarea
-  hi.innerHTML = hl(ta.value + "\n", activeLang);
+  // Put highlighted content inside <code> tag for hljs
+  const codeEl = hi.querySelector("code");
+  if (codeEl) {
+    codeEl.innerHTML = hl(ta.value, activeLang);
+  }
+  // Ensure textarea has proper dimensions
+  autoResizeTextarea(ta);
 }
 
 function syncLineNumbers(): void {
@@ -753,9 +758,19 @@ function syncLineNumbers(): void {
 }
 
 function syncScroll(): void {
-  const { ta, hi } = getEditorEls(); if (!ta || !hi) return;
-  hi.scrollTop  = ta.scrollTop;
-  hi.scrollLeft = ta.scrollLeft;
+  const wrap = $("editor-layer-wrap");
+  const ln = $("line-numbers");
+  if (!wrap) return;
+
+  // Sync line numbers scroll with editor scroll
+  if (ln) ln.scrollTop = wrap.scrollTop;
+}
+
+function autoResizeTextarea(ta: HTMLTextAreaElement): void {
+  // Ensure textarea can scroll and expand properly
+  ta.style.height = "auto";
+  ta.style.minHeight = "100%";
+  ta.style.height = Math.max(ta.scrollHeight, ta.offsetHeight) + "px";
 }
 
 function markDirty(): void {
@@ -926,7 +941,20 @@ function initEditor(): void {
     ghostTimer = setTimeout(() => { void triggerAutocomplete(); }, 420);
   });
 
-  ta.addEventListener("scroll", syncScroll);
+  // Scroll on the layer-wrap container (not textarea directly)
+  const wrap = $("editor-layer-wrap");
+  if (wrap) {
+    wrap.addEventListener("scroll", syncScroll);
+  }
+
+  // Also sync textarea scroll to container
+  ta.addEventListener("scroll", () => {
+    if (wrap) {
+      wrap.scrollTop = ta.scrollTop;
+      wrap.scrollLeft = ta.scrollLeft;
+    }
+    syncScroll();
+  });
 
   ta.addEventListener("keyup",   updateCursorStatus);
   ta.addEventListener("click",   updateCursorStatus);
@@ -1921,7 +1949,25 @@ function initTopbar(): void {
 }
 
 // ── Command Palette ───────────────────────────────────────────────────────────
-const PALETTE_BASE: Array<{ label: string; icon: string; cat: string; action: () => void }> = [
+interface PaletteCommand {
+  label?: string;
+  icon?: string;
+  cat?: string;
+  action?: () => void | Promise<void>;
+  type?: string;
+}
+
+const PALETTE_BASE: PaletteCommand[] = [
+  { label: "File: Open Folder…",          icon: "folder-open",    cat: "action",  action: () => {
+    const desktop = (window as any).clarityDesktop;
+    if (desktop?.openFolder) desktop.openFolder();
+  }},
+  { label: "File: Open File…",            icon: "file-plus",      cat: "action",  action: () => {
+    const desktop = (window as any).clarityDesktop;
+    if (desktop?.openFile) desktop.openFile();
+  }},
+  { label: "File: Show Welcome",          icon: "home",           cat: "action",  action: () => showWelcomeScreen() },
+  { type: "separator" },
   { label: "Chat: Ask Agent",             icon: "message-circle", cat: "panel",   action: () => switchView("chat") },
   { label: "Composer: Generate Patch",    icon: "edit-3",         cat: "panel",   action: () => { switchView("composer"); $("composer-generate")?.click(); } },
   { label: "Context: Rank",               icon: "database",       cat: "panel",   action: () => { switchView("context"); $("ctx-rank")?.click(); } },
@@ -1931,6 +1977,12 @@ const PALETTE_BASE: Array<{ label: string; icon: string; cat: string; action: ()
   { label: "Explorer: Refresh",           icon: "refresh-cw",     cat: "action",  action: () => loadFileTree() },
 ];
 
+function showWelcomeScreen(): void {
+  activeFilePath = "";
+  renderTabs();
+  updateWelcome();
+}
+
 function openPalette(): void {
   const ov = $("palette-overlay"), inp = $el<HTMLInputElement>("palette-input"); if (!ov || !inp) return;
   ov.classList.add("open"); inp.value = ""; renderPalette(""); inp.focus();
@@ -1939,23 +1991,28 @@ function closePalette(): void { $("palette-overlay")?.classList.remove("open"); 
 
 function renderPalette(query: string): void {
   const list = $("palette-results"); if (!list) return;
-  const fileCmds = allFiles.slice(0, 200).map(f => ({
+  const fileCmds: PaletteCommand[] = allFiles.slice(0, 200).map(f => ({
     label: `Open: ${f.path}`, icon: "file-code", cat: "file", action: () => openFile(f.path),
   }));
-  const all = [...PALETTE_BASE, ...fileCmds];
+  const all: PaletteCommand[] = [...PALETTE_BASE, ...fileCmds];
   const q = query.toLowerCase();
-  const filtered = (q ? all.filter(c => c.label.toLowerCase().includes(q)) : all).slice(0, 24);
+  // Filter out separators when searching, but keep them when not searching
+  const filtered = (q ? all.filter(c => c.label?.toLowerCase().includes(q)) : all).slice(0, 24)
+    .filter(c => c.type !== "separator");
   list.innerHTML = filtered.length === 0
     ? `<li class="palette-empty">No results for "${esc(query)}"</li>`
     : filtered.map((c, i) =>
         `<li class="palette-item ${i === 0 ? "focused" : ""}" data-i="${i}">
-          <i data-lucide="${c.icon}"></i>
-          <span>${esc(c.label)}</span>
-          <span class="palette-cat">${esc(c.cat)}</span>
+          <i data-lucide="${c.icon ?? "file"}"></i>
+          <span>${esc(c.label ?? "")}</span>
+          <span class="palette-cat">${esc(c.cat ?? "")}</span>
         </li>`
       ).join("");
   list.querySelectorAll<HTMLLIElement>(".palette-item").forEach(li => {
-    li.addEventListener("click", () => { const cmd = filtered[Number(li.dataset.i)]; if (cmd) { closePalette(); cmd.action(); } });
+    li.addEventListener("click", () => {
+      const cmd = filtered[Number(li.dataset.i)];
+      if (cmd?.action) { closePalette(); cmd.action(); }
+    });
     li.addEventListener("mouseenter", () => { list.querySelectorAll(".palette-item").forEach(x => x.classList.remove("focused")); li.classList.add("focused"); });
   });
   ri();
@@ -2578,13 +2635,16 @@ function toast(msg: string, type: "success" | "error" | "info" = "info", duratio
 }
 
 // ── Go-to-line ────────────────────────────────────────────────────────────────
+let openGotoLineFn: () => void = () => {};
+function openGotoLine(): void { openGotoLineFn(); }
+
 function initGotoLine(): void {
   const overlay = $("goto-overlay");
   const input   = $el<HTMLInputElement>("goto-input");
   const hint    = $("goto-hint");
   if (!overlay || !input) return;
 
-  const open = () => {
+  openGotoLineFn = () => {
     overlay.style.display = "flex";
     input.value = "";
     if (hint) hint.textContent = "";
@@ -2894,6 +2954,13 @@ interface TermSession { id: number; term: unknown; ws: WebSocket; container: HTM
 let termSessions: TermSession[] = [];
 let activeTermId = 0;
 let termCounter  = 0;
+let createTerminalTabFn: () => void = () => {};
+let focusTerminalFn: (id: number) => void = () => {};
+let killTerminalFn: (id: number) => void = () => {};
+
+function createTerminalTab(): void { createTerminalTabFn(); }
+function focusTerminal(id: number): void { focusTerminalFn(id); }
+function killTerminal(id: number): void { killTerminalFn(id); }
 
 function initTerminal(): void {
   const panel     = $("terminal-panel");
@@ -2905,7 +2972,7 @@ function initTerminal(): void {
   const FitAddon = ((window as unknown as Record<string, unknown>)["FitAddon"] as Record<string, unknown> | undefined)?.["FitAddon"] as (new () => unknown) | undefined;
   if (!XTerm) { console.warn("xterm.js not loaded — terminal unavailable"); return; }
 
-  function createSession(): void {
+  createTerminalTabFn = () => {
     const id = ++termCounter;
     const container = document.createElement("div");
     container.style.cssText = "position:absolute;inset:0;display:none;";
@@ -2957,6 +3024,14 @@ function initTerminal(): void {
     ro.observe(container);
   }
 
+  focusTerminalFn = (id: number) => {
+    activateTermSession(id);
+  };
+
+  killTerminalFn = (id: number) => {
+    closeTermSession(id);
+  };
+
   function activateTermSession(id: number): void {
     activeTermId = id;
     termSessions.forEach(s => {
@@ -2982,11 +3057,11 @@ function initTerminal(): void {
   function togglePanel(): void {
     const hidden = panel!.style.display === "none";
     panel!.style.display = hidden ? "flex" : "none";
-    if (hidden && termSessions.length === 0) createSession();
+    if (hidden && termSessions.length === 0) createTerminalTabFn();
     if (hidden && termSessions.length > 0) activateTermSession(activeTermId || termSessions[0].id);
   }
 
-  $("terminal-new-tab")?.addEventListener("click", () => createSession());
+  $("terminal-new-tab")?.addEventListener("click", () => createTerminalTabFn());
   $("terminal-clear")?.addEventListener("click", () => {
     const s = termSessions.find(s => s.id === activeTermId);
     if (s) (s.term as Record<string, () => void>)["clear"]();
@@ -3005,6 +3080,8 @@ function initTerminal(): void {
 // ── In-editor find / replace ──────────────────────────────────────────────────
 interface FindState { matches: [number,number][]; idx: number; caseS: boolean; word: boolean; regex: boolean; }
 const findState: FindState = { matches: [], idx: 0, caseS: false, word: false, regex: false };
+let openFindFn: (showReplace?: boolean) => void = () => {};
+function openFind(showReplace = false): void { openFindFn(showReplace); }
 
 function buildFindPattern(q: string): RegExp | null {
   if (!q) return null;
@@ -3049,7 +3126,7 @@ function initEditorFind(): void {
   const repFld  = $("find-replace-field");
   if (!bar || !findIn) return;
 
-  const openFind    = (showReplace = false) => {
+  openFindFn = (showReplace = false) => {
     bar.style.display = "";
     if (repFld) repFld.style.display = showReplace ? "" : "none";
     const ta = $el<HTMLTextAreaElement>("editor-content");
@@ -3058,6 +3135,7 @@ function initEditorFind(): void {
     findIn.focus(); findIn.select();
     runFind(findIn.value);
   };
+  const openLocal = openFindFn;
   const closeFind = () => { bar.style.display = "none"; $el<HTMLTextAreaElement>("editor-content")?.focus(); };
 
   $("find-close")?.addEventListener("click", closeFind);
@@ -3107,8 +3185,8 @@ function initEditorFind(): void {
   // Keyboard shortcuts
   document.addEventListener("keydown", e => {
     const mod = e.metaKey || e.ctrlKey;
-    if (mod && e.key === "f") { e.preventDefault(); openFind(false); }
-    if (mod && e.key === "h") { e.preventDefault(); openFind(true); }
+    if (mod && e.key === "f") { e.preventDefault(); openLocal(false); }
+    if (mod && e.key === "h") { e.preventDefault(); openLocal(true); }
     if (e.key === "F3" && bar.style.display !== "none") {
       e.preventDefault(); jumpToMatch(e.shiftKey ? findState.idx - 1 : findState.idx + 1);
     }
@@ -3117,28 +3195,92 @@ function initEditorFind(): void {
 }
 
 // ── Welcome screen ────────────────────────────────────────────────────────────
-function updateWelcome(): void {
+async function updateWelcome(): Promise<void> {
   const welcome = $("editor-welcome");
   if (!welcome) return;
   if (activeFilePath) { welcome.classList.add("hidden"); return; }
   welcome.classList.remove("hidden");
-  // Recent files
-  const recent = openTabs.filter(Boolean);
+
   const container = $("welcome-recent");
-  if (container && recent.length) {
-    container.innerHTML = `<div class="welcome-recent-title">Recent Files</div>` +
-      recent.map(p => {
+  if (!container) return;
+
+  const desktop = (window as any).clarityDesktop;
+  let recentHTML = "";
+
+  // Get recents from desktop API if available
+  if (desktop?.getRecents) {
+    try {
+      const recents = await desktop.getRecents();
+
+      // Recent Folders
+      if (recents.folders?.length > 0) {
+        recentHTML += `<div class="welcome-recent-title">Recent Folders</div>` +
+          recents.folders.map((folder: string) => {
+            const name = folder.split(/[/\\]/).pop() ?? folder;
+            return `<div class="welcome-recent-item welcome-recent-folder" data-folder="${esc(folder)}">
+              <i data-lucide="folder"></i><span>${esc(name)}</span>
+              <span class="welcome-recent-path">${esc(folder)}</span>
+            </div>`;
+          }).join("");
+      }
+
+      // Recent Files
+      if (recents.files?.length > 0) {
+        if (recents.folders?.length > 0) recentHTML += `<div class="welcome-recent-separator"></div>`;
+        recentHTML += `<div class="welcome-recent-title">Recent Files</div>` +
+          recents.files.map((file: string) => {
+            const name = file.split(/[/\\]/).pop() ?? file;
+            const dir = file.includes("/") || file.includes("\\") ? file.slice(0, file.lastIndexOf(file.includes("/") ? "/" : "\\")) : "";
+            return `<div class="welcome-recent-item welcome-recent-file" data-file="${esc(file)}">
+              <i data-lucide="file-code"></i><span>${esc(name)}</span>
+              ${dir ? `<span class="welcome-recent-path">${esc(dir)}</span>` : ""}
+            </div>`;
+          }).join("");
+      }
+    } catch (e) {
+      console.error("[clarity] Failed to load desktop recents:", e);
+    }
+  }
+
+  // Session recent files (open tabs from current session)
+  const sessionRecent = openTabs.filter(Boolean);
+  if (sessionRecent.length > 0) {
+    if (recentHTML) recentHTML += `<div class="welcome-recent-separator"></div>`;
+    recentHTML += `<div class="welcome-recent-title">Current Session</div>` +
+      sessionRecent.map(p => {
         const name = p.split("/").pop() ?? p;
-        const dir  = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
+        const dir = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
         return `<div class="welcome-recent-item" data-file="${esc(p)}">
           <i data-lucide="file-code"></i><span>${esc(name)}</span>
           ${dir ? `<span class="welcome-recent-path">${esc(dir)}</span>` : ""}
         </div>`;
       }).join("");
-    container.querySelectorAll<HTMLElement>(".welcome-recent-item").forEach(el => {
+  }
+
+  if (recentHTML) {
+    container.innerHTML = recentHTML;
+
+    // Wire up folder clicks
+    container.querySelectorAll<HTMLElement>(".welcome-recent-folder").forEach(el => {
+      el.addEventListener("click", () => {
+        const folder = el.dataset.folder ?? "";
+        if (desktop?.openFolder) {
+          // Use desktop API to open folder
+          desktop.openFolder().then(() => {
+            // Folder change will trigger page reload via server restart
+          });
+        }
+      });
+    });
+
+    // Wire up file clicks
+    container.querySelectorAll<HTMLElement>(".welcome-recent-item[data-file]").forEach(el => {
       el.addEventListener("click", () => openFile(el.dataset.file ?? ""));
     });
+
     ri();
+  } else {
+    container.innerHTML = `<div class="welcome-empty">No recent files. Open a folder to get started.</div>`;
   }
 }
 
@@ -3148,6 +3290,354 @@ function initWelcome(): void {
     document.querySelector<HTMLElement>(".activity-btn[data-view='search']")?.click();
     $el<HTMLInputElement>("search-input")?.focus();
   });
+
+  // Desktop integration for opening folders/files
+  initDesktopIntegration();
+}
+
+// ── Desktop Integration ─────────────────────────────────────────────────────────
+function initDesktopIntegration(): void {
+  const desktop = (window as any).clarityDesktop;
+  if (!desktop?.isDesktop) return;
+
+  // Subscribe to show-welcome events from main process
+  if (desktop.onShowWelcome) {
+    desktop.onShowWelcome(() => {
+      activeFilePath = "";
+      openTabs = [];
+      renderTabs();
+      renderFileTree();
+      updateWelcome();
+      // Reload file tree for the new (empty) workspace
+      loadFileTree();
+    });
+  }
+
+  // Subscribe to file open events from main process
+  if (desktop.onOpenFile) {
+    desktop.onOpenFile((filePath: string) => {
+      openFile(filePath);
+    });
+  }
+
+  // Handle startup file if passed from CLI
+  handleStartupFile();
+
+  // Initialize menu event handlers
+  initMenuHandlers();
+}
+
+// ── Menu Event Handlers ─────────────────────────────────────────────────────────
+function initMenuHandlers(): void {
+  const desktop = (window as any).clarityDesktop;
+  if (!desktop?.onMenuEvent) return;
+
+  const on = (channel: string, handler: (...args: any[]) => void) => {
+    desktop.onMenuEvent(channel, handler);
+  };
+
+  // File menu handlers
+  on("menu-new-file", () => {
+    // Create a new untitled file
+    const untitled = "untitled-" + Date.now() + ".txt";
+    activeFilePath = untitled;
+    openTabs.push(untitled);
+    renderTabs();
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (ta) {
+      ta.value = "";
+      ta.focus();
+    }
+    editorDirty = true;
+    renderTabs();
+  });
+
+  on("menu-save", () => saveCurrentFile());
+  on("menu-save-all", () => saveAllFiles());
+  on("menu-auto-save", (checked: boolean) => {
+    settings.autoSave = checked;
+    saveSettings();
+  });
+  on("menu-close-file", () => {
+    if (activeFilePath) closeTab(activeFilePath);
+  });
+  on("menu-close-all", () => {
+    [...openTabs].forEach(tab => closeTab(tab));
+  });
+
+  // Edit menu handlers
+  on("menu-find", () => openFindFn(false));
+  on("menu-find-replace", () => openFindFn(true));
+  on("menu-find-next", () => jumpToMatch(findState.idx + 1));
+  on("menu-find-prev", () => jumpToMatch(findState.idx - 1));
+  on("menu-goto-line", () => openGotoLine());
+  on("menu-goto-file", () => openPalette());
+  on("menu-goto-symbol", () => toast("Go to symbol: Coming soon"));
+  on("menu-paste-plain", () => {
+    // Paste as plain text by default (browser handles this)
+    document.execCommand("paste");
+  });
+  on("menu-select-all", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (ta) ta.select();
+  });
+
+  // Selection menu handlers
+  on("menu-select-line", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) return;
+    const lines = ta.value.split("\n");
+    let pos = ta.selectionStart;
+    let lineStart = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const lineEnd = lineStart + lines[i].length + 1;
+      if (pos >= lineStart && pos < lineEnd) {
+        ta.setSelectionRange(lineStart, lineEnd - 1);
+        break;
+      }
+      lineStart = lineEnd;
+    }
+  });
+
+  on("menu-select-word", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) return;
+    const text = ta.value;
+    let start = ta.selectionStart;
+    let end = ta.selectionEnd;
+    // Expand to word boundaries
+    while (start > 0 && /\w/.test(text[start - 1])) start--;
+    while (end < text.length && /\w/.test(text[end])) end++;
+    ta.setSelectionRange(start, end);
+  });
+
+  on("menu-expand-selection", () => toast("Expand selection: Coming soon"));
+  on("menu-shrink-selection", () => toast("Shrink selection: Coming soon"));
+  on("menu-select-next", () => toast("Select next occurrence: Coming soon"));
+  on("menu-copy-line-up", () => toast("Copy line up: Coming soon"));
+  on("menu-copy-line-down", () => toast("Copy line down: Coming soon"));
+  on("menu-move-line-up", () => toast("Move line up: Coming soon"));
+  on("menu-move-line-down", () => toast("Move line down: Coming soon"));
+  on("menu-cursor-above", () => toast("Add cursor above: Coming soon"));
+  on("menu-cursor-below", () => toast("Add cursor below: Coming soon"));
+  on("menu-cursor-ends", () => toast("Add cursor to line ends: Coming soon"));
+
+  // View menu handlers
+  on("menu-command-palette", () => openPalette());
+  on("menu-quick-open", () => openPalette());
+  on("menu-toggle-explorer", () => switchSidePanel("explorer"));
+  on("menu-toggle-search", () => switchSidePanel("search"));
+  on("menu-toggle-git", () => switchSidePanel("git"));
+  on("menu-toggle-chat", () => switchView("chat"));
+  on("menu-toggle-terminal", () => toggleTerminal());
+  on("menu-toggle-problems", () => toast("Problems panel: Coming soon"));
+  on("menu-show-commands", () => openPalette());
+  on("menu-toggle-sidebar", () => {
+    const sidebar = $("sidebar");
+    if (sidebar) sidebar.classList.toggle("hidden");
+  });
+  on("menu-toggle-ai-panel", () => {
+    const agent = $("agent-sidebar");
+    if (agent) agent.classList.toggle("hidden");
+  });
+  on("menu-toggle-status-bar", () => {
+    const sb = $("status-bar");
+    if (sb) sb.classList.toggle("hidden");
+  });
+  on("menu-zoom-in", () => {
+    settings.fontSize = Math.min(settings.fontSize + 1, 24);
+    applySettings();
+    saveSettings();
+  });
+  on("menu-zoom-out", () => {
+    settings.fontSize = Math.max(settings.fontSize - 1, 8);
+    applySettings();
+    saveSettings();
+  });
+  on("menu-zoom-reset", () => {
+    settings.fontSize = 13;
+    applySettings();
+    saveSettings();
+  });
+  on("menu-word-wrap", (checked: boolean) => {
+    settings.wordWrap = checked;
+    applySettings();
+    saveSettings();
+  });
+  on("menu-line-numbers", (checked: boolean) => {
+    settings.lineNumbers = checked;
+    applySettings();
+    saveSettings();
+  });
+  on("menu-minimap", () => toast("Minimap: Coming soon"));
+  on("menu-breadcrumbs", () => toast("Breadcrumbs: Coming soon"));
+  on("menu-whitespace", (mode: string) => toast(`Whitespace mode: ${mode}`));
+
+  // Go menu handlers
+  on("menu-nav-back", () => toast("Navigate back: Coming soon"));
+  on("menu-nav-forward", () => toast("Navigate forward: Coming soon"));
+  on("menu-last-edit", () => toast("Last edit location: Coming soon"));
+  on("menu-next-editor", () => {
+    if (openTabs.length < 2) return;
+    const idx = openTabs.indexOf(activeFilePath);
+    const next = openTabs[(idx + 1) % openTabs.length];
+    if (next) openFile(next);
+  });
+  on("menu-prev-editor", () => {
+    if (openTabs.length < 2) return;
+    const idx = openTabs.indexOf(activeFilePath);
+    const prev = openTabs[(idx - 1 + openTabs.length) % openTabs.length];
+    if (prev) openFile(prev);
+  });
+  on("menu-next-used", () => toast("Next used editor: Coming soon"));
+  on("menu-prev-used", () => toast("Previous used editor: Coming soon"));
+  on("menu-group", (group: number) => toast(`Switch to group ${group}: Coming soon`));
+  on("menu-goto-symbol-workspace", () => toast("Go to symbol in workspace: Coming soon"));
+  on("menu-goto-def", () => toast("Go to definition: Coming soon (needs LSP)"));
+  on("menu-goto-type-def", () => toast("Go to type definition: Coming soon (needs LSP)"));
+  on("menu-goto-impl", () => toast("Go to implementation: Coming soon (needs LSP)"));
+  on("menu-goto-refs", () => toast("Go to references: Coming soon (needs LSP)"));
+  on("menu-goto-bracket", () => toast("Go to bracket: Coming soon"));
+
+  // Run menu handlers
+  on("menu-debug-start", () => toast("Debug: Coming soon"));
+  on("menu-run", () => toast("Run: Coming soon"));
+  on("menu-stop", () => toast("Stop: Coming soon"));
+  on("menu-restart", () => toast("Restart: Coming soon"));
+  on("menu-build", () => toast("Build: Coming soon"));
+  on("menu-test", () => toast("Test: Coming soon"));
+  on("menu-ai-explain", () => {
+    switchView("chat");
+    addSlashCommand("/explain");
+  });
+  on("menu-ai-fix", () => {
+    switchView("chat");
+    addSlashCommand("/fix");
+  });
+  on("menu-ai-test", () => {
+    switchView("chat");
+    addSlashCommand("/test");
+  });
+  on("menu-ai-docstring", () => {
+    switchView("chat");
+    addSlashCommand("/docstring");
+  });
+  on("menu-ai-improve", () => {
+    switchView("chat");
+    addSlashCommand("/improve");
+  });
+  on("menu-composer", () => {
+    switchView("composer");
+    setTimeout(() => $("composer-generate")?.click(), 80);
+  });
+
+  // Terminal menu handlers
+  on("menu-new-terminal", () => {
+    const panel = $("terminal-panel");
+    if (panel) panel.style.display = "flex";
+    createTerminalTab();
+  });
+  on("menu-split-terminal", () => toast("Split terminal: Coming soon"));
+  on("menu-kill-terminal", () => {
+    if (activeTermId) killTerminal(activeTermId);
+  });
+  on("menu-focus-terminal", () => {
+    const panel = $("terminal-panel");
+    if (panel) {
+      panel.style.display = "flex";
+      focusTerminal(activeTermId);
+    }
+  });
+  on("menu-focus-editor", () => {
+    $el<HTMLTextAreaElement>("editor-content")?.focus();
+  });
+  on("menu-clear-terminal", () => {
+    const s = termSessions.find(s => s.id === activeTermId);
+    if (s) {
+      (s.term as Record<string, (d: string) => void>)["write"]("\r\n\x1b[2J\x1b[H");
+    }
+  });
+  on("menu-select-all-terminal", () => toast("Select all in terminal: Coming soon"));
+  on("menu-run-selected", () => toast("Run selected text: Coming soon"));
+  on("menu-run-file", () => toast("Run active file: Coming soon"));
+
+  // Help menu handlers
+  on("menu-ai-ask", () => {
+    switchView("chat");
+    $el<HTMLTextAreaElement>("chat-input")?.focus();
+  });
+  on("menu-toggle-context", () => switchView("context"));
+  on("menu-check-update", () => toast("Check for updates: Coming soon"));
+  on("menu-keyboard-ref", () => toast("Keyboard shortcuts: See Settings"));
+  on("menu-process-explorer", () => toast("Process explorer: Coming soon"));
+}
+
+// Helper function to add slash command to chat input
+function addSlashCommand(cmd: string): void {
+  const input = $el<HTMLTextAreaElement>("chat-input");
+  if (!input) return;
+  input.value = cmd + " " + input.value;
+  input.focus();
+}
+
+// Helper function to save all files
+async function saveAllFiles(): Promise<void> {
+  // In a real implementation, this would track all dirty tabs
+  await saveCurrentFile();
+  showToast("All files saved");
+}
+
+// Helper toast function for compatibility
+function showToast(msg: string, type: "success" | "error" | "info" = "info"): void {
+  toast(msg, type);
+}
+
+// Helper to close a tab
+function closeTab(path: string): void {
+  const idx = openTabs.indexOf(path);
+  if (idx === -1) return;
+  // Check if dirty and confirm
+  if (path === activeFilePath && editorDirty) {
+    // Could add confirm dialog here
+    saveCurrentFile();
+  }
+  openTabs.splice(idx, 1);
+  if (activeFilePath === path) {
+    activeFilePath = openTabs[openTabs.length - 1] || "";
+    if (activeFilePath) openFile(activeFilePath);
+    else {
+      renderTabs();
+      updateWelcome();
+    }
+  } else {
+    renderTabs();
+  }
+}
+
+// Helper function to toggle terminal
+function toggleTerminal(): void {
+  const panel = $("terminal-panel");
+  if (!panel) return;
+  const isVisible = panel.style.display !== "none";
+  panel.style.display = isVisible ? "none" : "flex";
+  if (!isVisible) {
+    focusTerminal(activeTermId);
+  }
+}
+
+async function handleStartupFile(): Promise<void> {
+  const desktop = (window as any).clarityDesktop;
+  if (!desktop?.getStartupFile) return;
+
+  try {
+    const startupFile = await desktop.getStartupFile();
+    if (startupFile) {
+      // Small delay to ensure file tree is loaded
+      setTimeout(() => openFile(startupFile), 500);
+    }
+  } catch (e) {
+    console.error("[clarity] Failed to get startup file:", e);
+  }
 }
 
 // ── Slash commands ────────────────────────────────────────────────────────────
@@ -3321,17 +3811,787 @@ async function bootstrap(): Promise<void> {
   initGit();
   initGitExtra();
   initTerminal();
+  initTitlebar();
   initGotoLine();
   initExplorerContextMenu();
   initEditorFind();
+  initMenuBar();
+  initPanelDropdowns();
   initWelcome();
   initSlashCommands();
   initExportSession();
   initSettingsSearch();
-  updateWelcome();
+  await updateWelcome();
   ri();
   await Promise.all([loadFileTree(), fetchGitBranch()]);
   startHealthPolling();
 }
+
+// ── Custom Electron titlebar ──────────────────────────────────────────────────
+function initTitlebar(): void {
+  const desktop = (window as any).clarityDesktop;
+  if (!desktop?.isDesktop) return;
+
+  // macOS-specific titlebar (hidden on other platforms now that we use frameless)
+  const bar = document.getElementById("clarity-titlebar");
+  if (bar) {
+    // Only show macOS titlebar on macOS
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+    if (isMac) {
+      bar.style.display = "flex";
+      document.body.classList.add("has-titlebar");
+
+      // Wire macOS titlebar buttons
+      document.getElementById("tb-minimize")?.addEventListener("click", () => desktop.minimize());
+      document.getElementById("tb-maximize")?.addEventListener("click", () => desktop.maximize());
+      document.getElementById("tb-close")?.addEventListener("click",    () => desktop.close());
+
+      // Update maximize icon when state changes
+      const updateMaxIcon = async () => {
+        const isMax = await desktop.isMaximized();
+        const btn = document.getElementById("tb-maximize");
+        if (!btn) return;
+        btn.title = isMax ? "Restore" : "Maximize";
+        btn.innerHTML = isMax
+          ? `<svg width="11" height="11" viewBox="0 0 12 12"><rect x="3" y="1.5" width="7.5" height="7.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="1.5" y="3" width="7.5" height="7.5" rx="1.2" fill="var(--bg-panel)" stroke="currentColor" stroke-width="1.2"/></svg>`
+          : `<svg width="11" height="11" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+      };
+      document.getElementById("tb-maximize")?.addEventListener("click", () => setTimeout(updateMaxIcon, 80));
+      updateMaxIcon();
+    }
+  }
+
+  // Wire up main window controls (in topbar) - used on Linux/Windows
+  const winControls = $("window-controls");
+  if (winControls) {
+    $("win-minimize")?.addEventListener("click", () => desktop.minimize());
+    $("win-maximize")?.addEventListener("click", () => {
+      desktop.maximize();
+      setTimeout(updateWinMaxIcon, 80);
+    });
+    $("win-close")?.addEventListener("click", () => desktop.close());
+
+    // Update maximize icon
+    const updateWinMaxIcon = async () => {
+      const isMax = await desktop.isMaximized();
+      const btn = $("win-maximize");
+      if (!btn) return;
+      btn.title = isMax ? "Restore" : "Maximize";
+      // Toggle between square (maximize) and overlapping squares (restore)
+      const icon = btn.querySelector("i");
+      if (icon) {
+        icon.setAttribute("data-lucide", isMax ? "copy" : "square");
+        // Re-render icon if lucide is available
+        if ((window as any).lucide) {
+          (window as any).lucide.createIcons({ nodes: [btn] });
+        }
+      }
+    };
+    updateWinMaxIcon();
+  }
+
+  // Show workspace root in center (macOS only, since Linux/Windows use main topbar)
+  const label = document.getElementById("tb-workspace-label");
+  if (label) {
+    fetch(`${API}/api/settings`).then(r => r.json()).then((s: any) => {
+      const root = s?.workspaceRoot ?? "";
+      label.textContent = root ? root.split("/").pop() ?? root : "Clarity IDE";
+      label.title = root;
+    }).catch(() => { label.textContent = "Clarity IDE"; });
+  }
+}
+
+// ── Menu Bar Initialization ───────────────────────────────────────────────────
+function initMenuBar(): void {
+  const menubar = $("menubar");
+  if (!menubar) return;
+
+  // Position dropdowns using fixed positioning
+  function positionDropdown(item: HTMLElement): void {
+    const dropdown = item.querySelector<HTMLElement>(".menu-dropdown");
+    if (!dropdown) return;
+
+    const rect = item.getBoundingClientRect();
+    dropdown.style.position = "fixed";
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+  }
+
+  // Close all dropdowns when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest(".menu-item")) {
+      menubar.querySelectorAll(".menu-item.active").forEach(el => {
+        el.classList.remove("active");
+      });
+    }
+  });
+
+  // Wire up menu items
+  menubar.querySelectorAll<HTMLElement>(".menu-item").forEach(item => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isActive = item.classList.contains("active");
+      // Close all others
+      menubar.querySelectorAll(".menu-item.active").forEach(el => el.classList.remove("active"));
+      // Toggle current and position dropdown
+      if (!isActive) {
+        item.classList.add("active");
+        positionDropdown(item);
+      }
+    });
+  });
+
+  // Wire up menu options
+  menubar.querySelectorAll<HTMLElement>(".menu-option").forEach(opt => {
+    opt.addEventListener("click", (e) => {
+      const action = opt.dataset.action;
+      const desktop = (window as any).clarityDesktop;
+      const menuItem = (e.target as HTMLElement).closest(".menu-item");
+
+      // Map actions to menu event channels
+      const actionMap: Record<string, string> = {
+        "new-file": "menu-new-file",
+        "new-window": "menu-new-file",
+        "open-folder": "menu-toggle-explorer",
+        "open-file": "menu-goto-file",
+        "save": "menu-save",
+        "save-all": "menu-save-all",
+        "close-file": "menu-close-file",
+        "quit": "menu-close-all",
+        "undo": "menu-undo",
+        "redo": "menu-redo",
+        "cut": "menu-cut",
+        "copy": "menu-copy",
+        "paste": "menu-paste",
+        "find": "menu-find",
+        "find-replace": "menu-find-replace",
+        "goto-line": "menu-goto-line",
+        "select-all": "menu-select-all",
+        "select-line": "menu-select-line",
+        "select-word": "menu-select-word",
+        "command-palette": "menu-command-palette",
+        "toggle-explorer": "menu-toggle-explorer",
+        "toggle-search": "menu-toggle-search",
+        "toggle-git": "menu-toggle-git",
+        "toggle-chat": "menu-toggle-chat",
+        "toggle-terminal": "menu-toggle-terminal",
+        "toggle-sidebar": "menu-toggle-sidebar",
+        "toggle-ai-panel": "menu-toggle-ai-panel",
+        "toggle-status-bar": "menu-toggle-status-bar",
+        "zoom-in": "menu-zoom-in",
+        "zoom-out": "menu-zoom-out",
+        "zoom-reset": "menu-zoom-reset",
+        "goto-file": "menu-goto-file",
+        "goto-symbol": "menu-goto-symbol",
+        "next-editor": "menu-next-editor",
+        "prev-editor": "menu-prev-editor",
+        "debug-start": "menu-debug-start",
+        "run": "menu-run",
+        "ai-explain": "menu-ai-explain",
+        "ai-fix": "menu-ai-fix",
+        "ai-test": "menu-ai-test",
+        "composer": "menu-composer",
+        "new-terminal": "menu-new-terminal",
+        "focus-terminal": "menu-focus-terminal",
+        "clear-terminal": "menu-clear-terminal",
+        "kill-terminal": "menu-kill-terminal",
+        "welcome": "show-welcome",
+        "show-commands": "menu-command-palette",
+        "ai-ask": "menu-ai-ask",
+        "documentation": "menu-documentation",
+        "keyboard-ref": "menu-keyboard-ref",
+        "about": "menu-about",
+      };
+
+      const channel = actionMap[action ?? ""];
+      if (channel) {
+        // Trigger via IPC if desktop, or call handler directly
+        if (desktop?.onMenuEvent) {
+          // Send to main process to come back through onMenuEvent
+          // For now, trigger directly through the handlers we set up
+          const handlers = (window as any)._menuHandlers?.get(channel);
+          if (handlers) {
+            handlers.forEach((cb: Function) => cb());
+          } else {
+            // Try to trigger common actions directly
+            handleMenuAction(action ?? "");
+          }
+        } else {
+          handleMenuAction(action ?? "");
+        }
+      }
+
+      // Close dropdown
+      menuItem?.classList.remove("active");
+    });
+  });
+}
+
+// Handle menu actions directly when not using IPC
+function handleMenuAction(action: string): void {
+  switch (action) {
+    case "new-file": {
+      const untitled = "untitled-" + Date.now() + ".txt";
+      activeFilePath = untitled;
+      openTabs.push(untitled);
+      renderTabs();
+      const ta = $el<HTMLTextAreaElement>("editor-content");
+      if (ta) { ta.value = ""; ta.focus(); }
+      editorDirty = true;
+      renderTabs();
+      break;
+    }
+    case "save": saveCurrentFile(); break;
+    case "save-all": saveAllFiles(); break;
+    case "close-file": if (activeFilePath) closeTab(activeFilePath); break;
+    case "find": openFindFn(false); break;
+    case "find-replace": openFindFn(true); break;
+    case "goto-line": openGotoLineFn(); break;
+    case "select-all": {
+      const ta = $el<HTMLTextAreaElement>("editor-content");
+      if (ta) ta.select();
+      break;
+    }
+    case "select-line": {
+      const ta = $el<HTMLTextAreaElement>("editor-content");
+      if (!ta) break;
+      const lines = ta.value.split("\n");
+      let pos = ta.selectionStart;
+      let lineStart = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const lineEnd = lineStart + lines[i].length + 1;
+        if (pos >= lineStart && pos < lineEnd) {
+          ta.setSelectionRange(lineStart, lineEnd - 1);
+          break;
+        }
+        lineStart = lineEnd;
+      }
+      break;
+    }
+    case "select-word": {
+      const ta = $el<HTMLTextAreaElement>("editor-content");
+      if (!ta) break;
+      const text = ta.value;
+      let start = ta.selectionStart;
+      let end = ta.selectionEnd;
+      while (start > 0 && /\w/.test(text[start - 1])) start--;
+      while (end < text.length && /\w/.test(text[end])) end++;
+      ta.setSelectionRange(start, end);
+      break;
+    }
+    case "command-palette":
+    case "show-commands":
+    case "goto-file": openPalette(); break;
+    case "toggle-explorer": switchSidePanel("explorer"); break;
+    case "toggle-search": switchSidePanel("search"); break;
+    case "toggle-git": switchSidePanel("git"); break;
+    case "toggle-chat": switchView("chat"); break;
+    case "toggle-terminal": toggleTerminal(); break;
+    case "toggle-sidebar": {
+      const sidebar = $("sidebar");
+      if (sidebar) sidebar.classList.toggle("hidden");
+      break;
+    }
+    case "toggle-ai-panel": {
+      const agent = $("agent-sidebar");
+      if (agent) agent.classList.toggle("hidden");
+      break;
+    }
+    case "toggle-status-bar": {
+      const sb = $("status-bar");
+      if (sb) sb.classList.toggle("hidden");
+      break;
+    }
+    case "zoom-in":
+      settings.fontSize = Math.min(settings.fontSize + 1, 24);
+      applySettings(); saveSettings();
+      break;
+    case "zoom-out":
+      settings.fontSize = Math.max(settings.fontSize - 1, 8);
+      applySettings(); saveSettings();
+      break;
+    case "zoom-reset":
+      settings.fontSize = 13;
+      applySettings(); saveSettings();
+      break;
+    case "next-editor": {
+      if (openTabs.length < 2) break;
+      const idx = openTabs.indexOf(activeFilePath);
+      const next = openTabs[(idx + 1) % openTabs.length];
+      if (next) openFile(next);
+      break;
+    }
+    case "prev-editor": {
+      if (openTabs.length < 2) break;
+      const idx = openTabs.indexOf(activeFilePath);
+      const prev = openTabs[(idx - 1 + openTabs.length) % openTabs.length];
+      if (prev) openFile(prev);
+      break;
+    }
+    case "ai-explain":
+      switchView("chat");
+      addSlashCommand("/explain");
+      break;
+    case "ai-fix":
+      switchView("chat");
+      addSlashCommand("/fix");
+      break;
+    case "ai-test":
+      switchView("chat");
+      addSlashCommand("/test");
+      break;
+    case "composer":
+      switchView("composer");
+      setTimeout(() => $("composer-generate")?.click(), 80);
+      break;
+    case "ai-ask":
+      switchView("chat");
+      $el<HTMLTextAreaElement>("chat-input")?.focus();
+      break;
+    case "welcome": showWelcomeScreen(); break;
+    case "new-terminal":
+      createTerminalTabFn();
+      break;
+    case "focus-terminal":
+      toggleTerminal();
+      break;
+    case "clear-terminal": {
+      const s = termSessions.find(s => s.id === activeTermId);
+      if (s) (s.term as Record<string, (d: string) => void>)["write"]("\r\n\x1b[2J\x1b[H");
+      break;
+    }
+    case "kill-terminal":
+      if (activeTermId) killTerminalFn(activeTermId);
+      break;
+    case "debug-start":
+    case "run":
+    case "goto-symbol":
+    case "documentation":
+    case "keyboard-ref":
+    case "about":
+      toast(`${action}: Coming soon`);
+      break;
+  }
+}
+
+// ── Panel Dropdowns ────────────────────────────────────────────────────────────
+function initPanelDropdowns(): void {
+  // Track active dropdown
+  let activeDropdown: HTMLElement | null = null;
+  let activeBtn: HTMLElement | null = null;
+
+  // Hide all dropdowns
+  const hideAll = () => {
+    document.querySelectorAll<HTMLElement>(".panel-dropdown").forEach(d => {
+      d.style.display = "none";
+    });
+    document.querySelectorAll<HTMLElement>(".panel-more-btn").forEach(b => {
+      b.classList.remove("active");
+    });
+    activeDropdown = null;
+    activeBtn = null;
+  };
+
+  // Position dropdown near button
+  const positionDropdown = (dropdown: HTMLElement, btn: HTMLElement) => {
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+  };
+
+  // Wire up more buttons
+  document.querySelectorAll<HTMLElement>(".panel-more-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const panel = btn.dataset.panel;
+      const dropdown = $(`panel-dropdown-${panel}`);
+      if (!dropdown) return;
+
+      // If already active, hide it
+      if (activeDropdown === dropdown) {
+        hideAll();
+        return;
+      }
+
+      // Hide any active dropdown
+      hideAll();
+
+      // Show this one
+      dropdown.style.display = "block";
+      btn.classList.add("active");
+      positionDropdown(dropdown, btn);
+      activeDropdown = dropdown;
+      activeBtn = btn;
+    });
+  });
+
+  // Handle dropdown item clicks
+  document.querySelectorAll<HTMLElement>(".panel-dropdown-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const action = item.dataset.action;
+      const panel = item.closest<HTMLElement>(".panel-dropdown")?.id?.replace("panel-dropdown-", "");
+
+      // Handle actions
+      switch (action) {
+        case "refresh":
+          if (panel === "explorer") loadFileTree();
+          break;
+        case "collapse":
+          if (panel === "explorer") collapseAllTree();
+          break;
+        case "new-file":
+          if (panel === "explorer") showNewFilePrompt();
+          break;
+        case "new-folder":
+          if (panel === "explorer") showNewFolderPrompt();
+          break;
+        case "undock":
+          toast(`${panel} panel: Undock coming soon`);
+          break;
+        case "move-right":
+          toast(`${panel} panel: Move right coming soon`);
+          break;
+        case "hide":
+          if (panel) switchSidePanel(panel);
+          break;
+        case "toggle-replace":
+          $("search-replace-container")?.classList.toggle("hidden");
+          break;
+        case "clear":
+          $("search-results")!.innerHTML = "";
+          $("search-result-count")!.textContent = "";
+          break;
+        case "case-sensitive":
+        case "whole-word":
+        case "regex":
+          toast(`Search ${action}: Toggle coming soon`);
+          break;
+        case "pull":
+          $("git-pull-btn")?.click();
+          break;
+        case "push":
+          $("git-push-btn")?.click();
+          break;
+        case "fetch":
+          $("git-fetch-btn")?.click();
+          break;
+        case "stash":
+          $("git-stash-btn")?.click();
+          break;
+        case "stash-pop":
+          $("git-stash-pop-btn")?.click();
+          break;
+      }
+
+      hideAll();
+    });
+  });
+
+  // Close on outside click
+  document.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest(".panel-dropdown") &&
+        !(e.target as HTMLElement).closest(".panel-more-btn")) {
+      hideAll();
+    }
+  });
+
+  // Update positions on scroll/resize
+  window.addEventListener("scroll", hideAll, true);
+  window.addEventListener("resize", hideAll);
+}
+
+// Helper functions for panel actions
+function collapseAllTree(): void {
+  document.querySelectorAll<HTMLElement>(".tree-dir.expanded").forEach(el => {
+    el.classList.remove("expanded");
+  });
+  toast("All folders collapsed");
+}
+
+function showNewFilePrompt(): void {
+  const name = prompt("Enter file name:");
+  if (name) createNewFile(name);
+}
+
+function showNewFolderPrompt(): void {
+  const name = prompt("Enter folder name:");
+  if (name) createNewFolder(name);
+}
+
+async function createNewFile(name: string): Promise<void> {
+  const rel = name;
+  const res = await fetch(`${API}/api/fs/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path: rel, isDir: false }),
+  }).then(r => r.json()) as { ok?: boolean; error?: string };
+  if (res.ok) {
+    toast(`Created ${rel}`, "success");
+    await loadFileTree();
+    await openFile(rel);
+  } else {
+    toast(res.error ?? "Failed to create file", "error");
+  }
+}
+
+async function createNewFolder(name: string): Promise<void> {
+  const rel = name;
+  const res = await fetch(`${API}/api/fs/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path: rel, isDir: true }),
+  }).then(r => r.json()) as { ok?: boolean; error?: string };
+  if (res.ok) {
+    toast(`Created folder ${rel}`, "success");
+    await loadFileTree();
+  } else {
+    toast(res.error ?? "Failed to create folder", "error");
+  }
+}
+
+// ── Floating Panels Manager ────────────────────────────────────────────────────
+interface FloatingPanel {
+  id: string;
+  originalPanel: HTMLElement;
+  floatingEl: HTMLElement;
+  contentEl: HTMLElement;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const floatingPanels = new Map<string, FloatingPanel>();
+let panelCounter = 0;
+
+function undockPanel(panelId: string): void {
+  const originalPanel = $(`${panelId}-panel`);
+  if (!originalPanel) return;
+
+  // Check if already undocked
+  if (floatingPanels.has(panelId)) return;
+
+  const container = $("floating-panels-container");
+  const template = document.getElementById("floating-panel-template") as HTMLTemplateElement;
+  if (!container || !template) return;
+
+  // Clone template
+  const clone = template.content.cloneNode(true) as DocumentFragment;
+  const floatingEl = clone.querySelector(".floating-panel") as HTMLElement;
+  if (!floatingEl) return;
+
+  // Set unique ID
+  const instanceId = `floating-${panelId}-${++panelCounter}`;
+  floatingEl.id = instanceId;
+
+  // Position near the original panel
+  const rect = originalPanel.getBoundingClientRect();
+  const x = Math.min(rect.left + 50, window.innerWidth - 340);
+  const y = Math.min(rect.top + 50, window.innerHeight - 420);
+
+  floatingEl.style.left = `${x}px`;
+  floatingEl.style.top = `${y}px`;
+
+  // Set title
+  const titleEl = floatingEl.querySelector(".floating-panel-title");
+  if (titleEl) {
+    titleEl.textContent = panelId === "explorer" ? "Explorer" :
+                         panelId === "search" ? "Search" :
+                         panelId === "git" ? "Source Control" : panelId;
+  }
+
+  // Move content
+  const contentEl = floatingEl.querySelector(".floating-panel-content") as HTMLElement;
+  if (contentEl) {
+    // Clone the panel content
+    const panelContent = originalPanel.cloneNode(true) as HTMLElement;
+    panelContent.style.display = "flex";
+    panelContent.style.height = "100%";
+    contentEl.appendChild(panelContent);
+  }
+
+  // Wire up buttons
+  const dockBtn = floatingEl.querySelector(".dock-btn");
+  dockBtn?.addEventListener("click", () => dockPanel(panelId));
+
+  const closeBtn = floatingEl.querySelector(".close-btn");
+  closeBtn?.addEventListener("click", () => closeFloatingPanel(panelId));
+
+  // Make draggable
+  makePanelDraggable(floatingEl, instanceId);
+
+  // Make resizable
+  makePanelResizable(floatingEl, instanceId);
+
+  // Add to container
+  container.appendChild(floatingEl);
+
+  // Store reference
+  floatingPanels.set(panelId, {
+    id: instanceId,
+    originalPanel,
+    floatingEl,
+    contentEl: contentEl!,
+    x,
+    y,
+    width: 320,
+    height: 400
+  });
+
+  // Hide original
+  originalPanel.style.display = "none";
+
+  // Re-initialize icons
+  if ((window as any).lucide) {
+    (window as any).lucide.createIcons({ nodes: [floatingEl] });
+  }
+
+  toast(`${panelId} panel undocked`, "success");
+}
+
+function dockPanel(panelId: string): void {
+  const panel = floatingPanels.get(panelId);
+  if (!panel) return;
+
+  // Show original
+  panel.originalPanel.style.display = "";
+
+  // Remove floating
+  panel.floatingEl.remove();
+
+  // Remove from map
+  floatingPanels.delete(panelId);
+
+  // If this panel was active, make sure it's visible
+  switchSidePanel(panelId);
+
+  toast(`${panelId} panel docked`, "success");
+}
+
+function closeFloatingPanel(panelId: string): void {
+  const panel = floatingPanels.get(panelId);
+  if (!panel) return;
+
+  // Remove floating panel
+  panel.floatingEl.remove();
+
+  // Remove from map
+  floatingPanels.delete(panelId);
+
+  // Show original back
+  panel.originalPanel.style.display = "";
+}
+
+function makePanelDraggable(el: HTMLElement, id: string): void {
+  const header = el.querySelector(".floating-panel-header") as HTMLElement | null;
+  if (!header) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initialX = 0;
+  let initialY = 0;
+
+  header.addEventListener("mousedown", (e) => {
+    const evt = e as MouseEvent;
+    isDragging = true;
+    startX = evt.clientX;
+    startY = evt.clientY;
+    initialX = el.offsetLeft;
+    initialY = el.offsetTop;
+    el.classList.add("dragging");
+    evt.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const evt = e as MouseEvent;
+    const dx = evt.clientX - startX;
+    const dy = evt.clientY - startY;
+
+    el.style.left = `${initialX + dx}px`;
+    el.style.top = `${initialY + dy}px`;
+
+    // Update stored position
+    const panel = Array.from(floatingPanels.values()).find(p => p.floatingEl === el);
+    if (panel) {
+      panel.x = initialX + dx;
+      panel.y = initialY + dy;
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (isDragging) {
+      isDragging = false;
+      el.classList.remove("dragging");
+    }
+  });
+}
+
+function makePanelResizable(el: HTMLElement, id: string): void {
+  const handle = el.querySelector(".floating-panel-resize-handle") as HTMLElement | null;
+  if (!handle) return;
+
+  let isResizing = false;
+  let startX = 0;
+  let startY = 0;
+  let initialWidth = 0;
+  let initialHeight = 0;
+
+  handle.addEventListener("mousedown", (e) => {
+    const evt = e as MouseEvent;
+    isResizing = true;
+    startX = evt.clientX;
+    startY = evt.clientY;
+    initialWidth = el.offsetWidth;
+    initialHeight = el.offsetHeight;
+    evt.preventDefault();
+    evt.stopPropagation();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isResizing) return;
+    const evt = e as MouseEvent;
+    const dx = evt.clientX - startX;
+    const dy = evt.clientY - startY;
+
+    const newWidth = Math.max(240, initialWidth + dx);
+    const newHeight = Math.max(200, initialHeight + dy);
+
+    el.style.width = `${newWidth}px`;
+    el.style.height = `${newHeight}px`;
+
+    // Update stored size
+    const panel = Array.from(floatingPanels.values()).find(p => p.floatingEl === el);
+    if (panel) {
+      panel.width = newWidth;
+      panel.height = newHeight;
+    }
+  });
+
+  document.addEventListener("mouseup", () => {
+    isResizing = false;
+  });
+}
+
+// Update the undock action in panel dropdowns
+function initUndockFeature(): void {
+  // Hook into existing dropdown handler
+  document.addEventListener("click", (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>(".panel-dropdown-item");
+    if (!item) return;
+
+    const action = item.dataset.action;
+    const dropdown = item.closest<HTMLElement>(".panel-dropdown");
+    const panelId = dropdown?.id?.replace("panel-dropdown-", "");
+
+    if (action === "undock" && panelId) {
+      undockPanel(panelId);
+    }
+  });
+}
+
+// Initialize undock feature
+document.addEventListener("DOMContentLoaded", initUndockFeature);
 
 bootstrap();

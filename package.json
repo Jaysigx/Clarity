@@ -4,7 +4,7 @@
   "private": true,
   "description": "AI-native IDE foundation",
   "workspaces": [
-    "apps/*",
+    "apps/webview",
     "packages/*"
   ],
   "scripts": {
@@ -12,7 +12,13 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "demo": "npm run build && node ./apps/webview/dist/apps/webview/src/demo.js",
-    "ui": "npm run build && npm run serve --workspace @clarity/webview"
+    "ui": "npm run build && npm run serve --workspace @clarity/webview",
+    "serve": "npm run build && npm run serve --workspace @clarity/webview",
+    "electron": "npm run build && cd apps/desktop && npm install && npx electron .",
+    "desktop": "npm run build && cd apps/desktop && npm run dev",
+    "desktop:dev": "npm run build && cd apps/desktop && npm run dev",
+    "desktop:build": "cd apps/desktop && npm run build",
+    "desktop:dist": "cd apps/desktop && npm run dist"
   },
   "engines": {
     "node": ">=20.0.0"

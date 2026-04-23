@@ -1,8 +1,8 @@
 {
-  "name": "@clarity/desktop",
+  "name": "clarity-desktop",
   "version": "0.2.0",
   "private": true,
-  "description": "Clarity IDE — Electron desktop shell",
+  "description": "Clarity IDE — AI-native code editor",
   "main": "main.js",
   "scripts": {
     "dev":   "electron .",
@@ -32,22 +32,137 @@
     ],
     "linux": {
       "target": ["AppImage", "deb"],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "Clarity IDE Contributors",
+      "synopsis": "AI-native code editor",
+      "description": "Clarity IDE is an AI-native code editor with built-in context awareness.",
+      "desktop": {
+        "Name": "Clarity IDE",
+        "Comment": "AI-native code editor",
+        "Categories": "Development;IDE;TextEditor;",
+        "MimeType": "text/plain;text/html;text/css;text/javascript;application/json;application/typescript;application/xml;application/x-python-code;application/x-sh;application/x-yaml;application/toml;application/x-ini;application/x-config;application/x-markdown;"
+      }
     },
     "mac": {
       "target": ["dmg", "zip"],
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "category": "public.app-category.developer-tools",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Text Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.text", "public.source-code"]
+          },
+          {
+            "CFBundleTypeName": "JavaScript",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.netscape.javascript-source"]
+          },
+          {
+            "CFBundleTypeName": "JSON Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.json"]
+          },
+          {
+            "CFBundleTypeName": "Markdown Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["net.daringfireball.markdown"]
+          },
+          {
+            "CFBundleTypeName": "HTML Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.html"]
+          },
+          {
+            "CFBundleTypeName": "CSS Document",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.css"]
+          },
+          {
+            "CFBundleTypeName": "Python Script",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.python-script"]
+          },
+          {
+            "CFBundleTypeName": "TypeScript",
+            "CFBundleTypeRole": "Editor",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["com.microsoft.typescript"]
+          }
+        ]
+      }
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": ["nsis", "portable"],
+      "fileAssociations": [
+        { "ext": "txt", "name": "Text File", "description": "Plain Text Document" },
+        { "ext": "js", "name": "JavaScript", "description": "JavaScript Source File" },
+        { "ext": "ts", "name": "TypeScript", "description": "TypeScript Source File" },
+        { "ext": "jsx", "name": "JSX", "description": "React JSX File" },
+        { "ext": "tsx", "name": "TSX", "description": "React TSX File" },
+        { "ext": "json", "name": "JSON", "description": "JSON Document" },
+        { "ext": "html", "name": "HTML", "description": "HTML Document" },
+        { "ext": "htm", "name": "HTML", "description": "HTML Document" },
+        { "ext": "css", "name": "CSS", "description": "CSS Stylesheet" },
+        { "ext": "scss", "name": "SCSS", "description": "Sass Stylesheet" },
+        { "ext": "less", "name": "Less", "description": "Less Stylesheet" },
+        { "ext": "md", "name": "Markdown", "description": "Markdown Document" },
+        { "ext": "mdx", "name": "MDX", "description": "MDX Document" },
+        { "ext": "py", "name": "Python", "description": "Python Script" },
+        { "ext": "xml", "name": "XML", "description": "XML Document" },
+        { "ext": "yaml", "name": "YAML", "description": "YAML Document" },
+        { "ext": "yml", "name": "YAML", "description": "YAML Document" },
+        { "ext": "toml", "name": "TOML", "description": "TOML Document" },
+        { "ext": "ini", "name": "INI", "description": "INI Configuration" },
+        { "ext": "sh", "name": "Shell Script", "description": "Shell Script" },
+        { "ext": "bash", "name": "Bash Script", "description": "Bash Script" },
+        { "ext": "zsh", "name": "Zsh Script", "description": "Zsh Script" },
+        { "ext": "rs", "name": "Rust", "description": "Rust Source File" },
+        { "ext": "go", "name": "Go", "description": "Go Source File" },
+        { "ext": "rb", "name": "Ruby", "description": "Ruby Script" },
+        { "ext": "php", "name": "PHP", "description": "PHP Script" },
+        { "ext": "java", "name": "Java", "description": "Java Source File" },
+        { "ext": "c", "name": "C", "description": "C Source File" },
+        { "ext": "cpp", "name": "C++", "description": "C++ Source File" },
+        { "ext": "h", "name": "C Header", "description": "C Header File" },
+        { "ext": "hpp", "name": "C++ Header", "description": "C++ Header File" }
+      ]
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Clarity IDE",
+      "uninstallDisplayName": "Clarity IDE",
+      "license": "../../LICENSE",
+      "artifactName": "Clarity-IDE-Setup-${version}.${ext}"
+    },
+    "protocols": [
+      {
+        "name": "Clarity Protocol",
+        "schemes": ["clarity"],
+        "role": "Editor"
+      }
+    ]
+  },
+  "homepage": "https://github.com/Jaysigx/Clarity",
+  "author": {
+    "name": "Jaysigx",
+    "email": "contactjaskaran@gmail.com"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
+    "electron": "34.0.0",
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
