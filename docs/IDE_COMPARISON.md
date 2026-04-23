@@ -97,13 +97,14 @@
 | AI explain / generate tests | ✅ | ✅ | ✅ | ✅ | 🟡 via slash cmd | 🎯 dedicated endpoints |
 | Export session as Markdown | ❌ | ❌ | ❌ | ❌ | ✅ **unique** | — |
 | Voice input | ❌ | ❌ | ❌ | ❌ | ❌ | 🎯 Web Speech API |
+| AI Vision — AI sees editor viewport | ❌ | ❌ | ❌ | ❌ | ✅ **unique** | — |
 | Image / screenshot in chat | ✅ | ✅ | ✅ | 🟡 | ❌ | 🎯 paste PNG |
 | @filename mention | ✅ | ✅ | ✅ | 🟡 | ❌ | 🎯 |
 | Tool use / function calling | 🟡 | ✅ | ✅ | 🟡 | ❌ | 🎯 model calls `/api/*` |
 | **Free AI — no CC required** | ❌ Copilot paid | 🟡 limited | 🟡 limited | 🟡 | ✅ Groq + OpenRouter | 🎯 + Gemini + HF |
 | **Local model support** | 🟡 ext | ✅ Ollama | ✅ Ollama | ✅ | ✅ Ollama + LM Studio | 🎯 + Jan + llamafile |
 | **BYOM — any model** | 🟡 | ✅ | ✅ | ✅ | ✅ | — |
-| **Zero account required** | ✅ | ❌ | ❌ | 🟡 | ✅ | — |
+| **Zero account required** | ✅ | ❌ | ❌ | 🟡 | ✅ **only one** | — |
 
 ---
 
@@ -118,7 +119,7 @@
 | Branch switcher + create | ✅ | ✅ | ✅ | ✅ | — |
 | Inline diff (color-coded) | ✅ | ✅ | ✅ | ✅ | — |
 | Commit log (30 entries) | ✅ | ✅ | 🟡 | ✅ | — |
-| Stash / pop | ✅ | ✅ | ✅ | ❌ | 🎯 |
+| Stash / pop | ✅ | ✅ | ✅ | ✅ **shipped** | — |
 | Merge conflict editor | ✅ | ✅ | ✅ | ❌ | 🎯 per-hunk accept |
 | Git blame | ✅ | ✅ | ✅ | ❌ | 🎯 gutter annotations |
 | Word-level diff | ✅ | ✅ | ✅ | ❌ | 🎯 |
@@ -171,7 +172,7 @@
 
 | Feature | VS Code | Zed | Neovim | **Clarity — now** | **Clarity — planned** |
 |---------|---------|-----|--------|-------------------|----------------------|
-| Integrated terminal | ✅ | ✅ | ✅ native | ❌ | 🎯 xterm.js + node-pty |
+| Integrated terminal | ✅ | ✅ | ✅ native | ✅ **shipped** xterm.js | — |
 | Multiple terminal tabs | ✅ | ✅ | ✅ | ❌ | 🎯 |
 | Shell detection | ✅ | ✅ | ✅ | ❌ | 🎯 bash/zsh/fish/pwsh |
 | AI command suggestions | ✅ ext | 🟡 | ❌ | ❌ | 🎯 right-click → explain |
@@ -211,7 +212,7 @@
 | Feature | VS Code | Cursor | Zed | **Clarity — now** | **Clarity — planned** |
 |---------|---------|--------|-----|-------------------|----------------------|
 | Desktop shell | ✅ Electron | ✅ Electron | ✅ native Rust | ✅* Tauri v2 scaffolded | 🎯 full bundle |
-| Native menu bar | ✅ | ✅ | ✅ | ❌ | 🎯 OS native menu |
+| Native menu bar | ✅ | ✅ | ✅ | ✅ **shipped** | — |
 | System tray | ✅ | ✅ | ❌ | ❌ | 🎯 |
 | Auto-update | ✅ | ✅ | ✅ | ❌ | 🎯 GitHub releases |
 | macOS `.dmg` | ✅ | ✅ | ✅ | ❌ | 🎯 Tauri bundle |
@@ -311,6 +312,7 @@
 | **Rolling summary compression** | ✅ unique | Extends effective context window without hitting token limits |
 | **Export session as Markdown** | ✅ unique | No competing IDE offers this |
 | **Custom accent color** | ✅ unique | Small but memorable personalisation |
+| **AI Vision — AI sees your code** | ✅ unique | Only IDE where AI sees cursor position & viewport |
 | **Single-file server (no deps)** | ✅ | `node server.mjs` — zero npm install for runtime |
 | **Tauri desktop (not Electron)** | ✅ scaffolded | 50MB vs 300MB; no Chromium bloat |
 
