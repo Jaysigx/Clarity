@@ -799,10 +799,15 @@ function syncScroll(): void {
 }
 
 function autoResizeTextarea(ta: HTMLTextAreaElement): void {
-  // Ensure textarea can scroll and expand properly
+  // Make textarea exactly match its content height - no internal scrolling
   ta.style.height = "auto";
-  ta.style.minHeight = "100%";
-  ta.style.height = Math.max(ta.scrollHeight, ta.offsetHeight) + "px";
+  // Set height to scrollHeight to encompass all content
+  const newHeight = ta.scrollHeight;
+  ta.style.height = newHeight + "px";
+
+  // Also update the highlight layer to match
+  const hi = $("editor-highlight");
+  if (hi) hi.style.height = newHeight + "px";
 }
 
 function markDirty(): void {
@@ -973,20 +978,20 @@ function initEditor(): void {
     ghostTimer = setTimeout(() => { void triggerAutocomplete(); }, 420);
   });
 
-  // Scroll on the layer-wrap container (not textarea directly)
+  // Scroll only happens on the layer-wrap container (textarea has overflow:hidden)
   const wrap = $("editor-layer-wrap");
   if (wrap) {
     wrap.addEventListener("scroll", syncScroll);
   }
 
-  // Also sync textarea scroll to container
-  ta.addEventListener("scroll", () => {
+  // Wheel events on textarea should scroll the container
+  ta.addEventListener("wheel", (e) => {
+    e.preventDefault();
     if (wrap) {
-      wrap.scrollTop = ta.scrollTop;
-      wrap.scrollLeft = ta.scrollLeft;
+      wrap.scrollTop += e.deltaY;
+      wrap.scrollLeft += e.deltaX;
     }
-    syncScroll();
-  });
+  }, { passive: false });
 
   ta.addEventListener("keyup",   updateCursorStatus);
   ta.addEventListener("click",   updateCursorStatus);

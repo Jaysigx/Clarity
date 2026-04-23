@@ -691,7 +691,7 @@ body.no-scanlines .scanlines { display: none; }
   line-height: 1.65; white-space: pre; tab-size: 4;
   margin: 0; padding: 16px 20px;
   box-sizing: border-box;
-  min-width: 100%; min-height: 100%;
+  min-width: 100%;
 }
 
 .editor-highlight {
@@ -699,6 +699,7 @@ body.no-scanlines .scanlines { display: none; }
   pointer-events: none; user-select: none;
   position: absolute;
   top: 0; left: 0;
+  min-width: 100%;
   z-index: 1;
   color: var(--text);
 }
@@ -709,6 +710,7 @@ body.no-scanlines .scanlines { display: none; }
   border: none;
   resize: none;
   outline: none;
+  overflow: hidden; /* Textarea never scrolls - container does */
   position: relative;
   z-index: 2;
   color: transparent;
