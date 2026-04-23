@@ -732,43 +732,179 @@ body.no-scanlines .scanlines { display: none; }
   min-height: 100%;
 }
 
-/* Editor syntax highlighting - ensure all tokens visible */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COMPREHENSIVE SYNTAX HIGHLIGHTING - ALL TOKENS MUST BE VISIBLE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Base - all text visible */
+.editor-highlight,
+.editor-highlight code,
+.editor-highlight .hljs {
+  color: var(--text) !important;
+  background: transparent !important;
+}
+
+/* Keywords - control flow, declarations */
 .editor-highlight .hljs-keyword,
-.editor-highlight .hljs-operator,
-.editor-highlight .hljs-punctuation,
-.editor-highlight .hljs-attr,
-.editor-highlight .hljs-property {
-  color: var(--accent);
+.editor-highlight .hljs-builtin-name,
+.editor-highlight .hljs-meta-keyword,
+.editor-highlight .hljs-template-tag {
+  color: #c792ea !important; /* Purple */
+  font-weight: 500;
 }
 
+/* Strings - text values */
 .editor-highlight .hljs-string,
-.editor-highlight .hljs-string .hljs-punctuation {
-  color: #a5d6a7;
+.editor-highlight .hljs-template-string,
+.editor-highlight .hljs-regexp,
+.editor-highlight .hljs-char {
+  color: #c3e88d !important; /* Green */
 }
 
+/* Numbers - literals */
 .editor-highlight .hljs-number,
-.editor-highlight .hljs-literal {
-  color: #ffab91;
+.editor-highlight .hljs-literal,
+.editor-highlight .hljs-boolean,
+.editor-highlight .hljs-symbol {
+  color: #f78c6c !important; /* Orange */
 }
 
-.editor-highlight .hljs-comment {
-  color: var(--text-dim);
+/* Comments - documentation */
+.editor-highlight .hljs-comment,
+.editor-highlight .hljs-quote {
+  color: #676e95 !important; /* Muted gray */
   font-style: italic;
 }
 
+/* Functions - callable items */
 .editor-highlight .hljs-function,
-.editor-highlight .hljs-title {
-  color: #82b1ff;
+.editor-highlight .hljs-title,
+.editor-highlight .hljs-title.function,
+.editor-highlight .hljs-section {
+  color: #82aaff !important; /* Blue */
 }
 
+/* Classes - types, classes */
+.editor-highlight .hljs-class,
+.editor-highlight .hljs-title.class {
+  color: #ffcb6b !important; /* Yellow */
+}
+
+/* Variables - identifiers */
+.editor-highlight .hljs-variable,
 .editor-highlight .hljs-params,
-.editor-highlight .hljs-variable {
-  color: var(--text);
+.editor-highlight .hljs-attribute {
+  color: #f07178 !important; /* Red/Pink */
 }
 
+/* Constants - immutable values */
+.editor-highlight .hljs-constant,
+.editor-highlight .hljs-variable.constant {
+  color: #f78c6c !important; /* Orange */
+  font-weight: 500;
+}
+
+/* Properties - object properties */
+.editor-highlight .hljs-property,
+.editor-highlight .hljs-attr {
+  color: #ffcb6b !important; /* Yellow */
+}
+
+/* Operators - symbols that operate */
 .editor-highlight .hljs-operator,
 .editor-highlight .hljs-punctuation {
-  color: var(--text-muted);
+  color: #89ddff !important; /* Light blue */
+}
+
+/* Tags - HTML/XML */
+.editor-highlight .hljs-tag,
+.editor-highlight .hljs-name {
+  color: #f07178 !important; /* Red */
+}
+
+/* Attributes - HTML attributes */
+.editor-highlight .hljs-attr {
+  color: #ffcb6b !important; /* Yellow */
+}
+
+/* Built-ins - language built-ins */
+.editor-highlight .hljs-built_in,
+.editor-highlight .hljs-builtin {
+  color: #82aaff !important; /* Blue */
+}
+
+/* Types - type annotations */
+.editor-highlight .hljs-type,
+.editor-highlight .hljs-type-def {
+  color: #ffcb6b !important; /* Yellow */
+}
+
+/* Links - URLs */
+.editor-highlight .hljs-link {
+  color: #82aaff !important;
+  text-decoration: underline;
+}
+
+/* Emphasis */
+.editor-highlight .hljs-emphasis {
+  font-style: italic;
+}
+
+/* Strong */
+.editor-highlight .hljs-strong {
+  font-weight: 700;
+}
+
+/* Addition - diff */
+.editor-highlight .hljs-addition {
+  color: #c3e88d !important;
+  background: rgba(195, 232, 141, 0.1);
+}
+
+/* Deletion - diff */
+.editor-highlight .hljs-deletion {
+  color: #f07178 !important;
+  background: rgba(240, 113, 120, 0.1);
+}
+
+/* Specific language overrides */
+
+/* JavaScript/TypeScript */
+.editor-highlight.language-javascript .hljs-keyword,
+.editor-highlight.language-typescript .hljs-keyword {
+  color: #c792ea !important;
+}
+
+/* Python */
+.editor-highlight.language-python .hljs-decorator {
+  color: #f78c6c !important;
+}
+
+/* CSS */
+.editor-highlight.language-css .hljs-selector {
+  color: #f07178 !important;
+}
+.editor-highlight.language-css .hljs-property {
+  color: #ffcb6b !important;
+}
+
+/* JSON */
+.editor-highlight.language-json .hljs-attr {
+  color: #c792ea !important;
+}
+.editor-highlight.language-json .hljs-string {
+  color: #c3e88d !important;
+}
+
+/* Markdown */
+.editor-highlight.language-markdown .hljs-section {
+  color: #c792ea !important;
+  font-weight: 700;
+}
+
+/* Fallback - ensure ALL text is visible */
+.editor-highlight * {
+  color: inherit;
 }
 
 /* hljs override */
@@ -1060,15 +1196,107 @@ body.no-scanlines .scanlines { display: none; }
 .chat-stop-btn:hover { background: rgba(239,68,68,0.2); }
 .chat-stop-btn i { width: 12px; height: 12px; }
 
-/* Attach file strip */
-.chat-attach-strip {
-  display: flex; align-items: center; gap: 7px;
-  padding: 5px 12px; background: rgba(59,130,246,0.06);
-  border-top: 1px solid var(--accent-border); flex-shrink: 0;
-  font-size: 11px; color: var(--text-muted);
+/* Attachments container */
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  max-height: 80px;
+  overflow-y: auto;
 }
-.chat-attach-strip i { width: 12px; height: 12px; color: var(--accent); flex-shrink: 0; }
-.chat-attach-strip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Attachment chips */
+.attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+  animation: chipSlideIn 0.2s ease-out;
+}
+
+.attach-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.attach-chip i {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.attach-chip.vision-chip {
+  background: rgba(199, 146, 234, 0.1);
+  border-color: rgba(199, 146, 234, 0.3);
+}
+
+.attach-chip.vision-chip i {
+  color: #c792ea;
+}
+
+.attach-chip.selection-chip {
+  background: rgba(255, 203, 107, 0.1);
+  border-color: rgba(255, 203, 107, 0.3);
+}
+
+.attach-chip.selection-chip i {
+  color: #ffcb6b;
+}
+
+.attach-chip button {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.attach-chip:hover button {
+  opacity: 1;
+}
+
+@keyframes chipSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* AI Vision button active state */
+.ai-vision-btn.active {
+  color: #c792ea;
+  background: rgba(199, 146, 234, 0.15);
+}
+
+/* Context badge */
+.chat-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  font-size: 10px;
+  color: var(--accent);
+  margin-left: 8px;
+}
+
+.chat-context-badge i {
+  width: 10px;
+  height: 10px;
+}
 
 /* Input area */
 .chat-input-area {

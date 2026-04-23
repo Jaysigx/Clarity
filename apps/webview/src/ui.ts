@@ -95,6 +95,38 @@ let chatHistory: ChatMessage[] = [];   // live messages for current session
 
 let chatAbort: AbortController | null = null;
 let composerAbort: AbortController | null = null;
+
+// Chat attachments (AI Vision, file context, selection)
+interface ChatAttachment {
+  type: "file" | "vision" | "selection";
+  content: string;
+  label: string;
+}
+let activeAttachments: ChatAttachment[] = [];
+
+function getAttachmentsContext(): string {
+  if (activeAttachments.length === 0) return "";
+  return activeAttachments.map(att => {
+    if (att.type === "file") return `Current file (${att.label}):\n\`\`\`\n${att.content}\n\`\`\``;
+    if (att.type === "vision") return `Current editor view:\n\`\`\`\n${att.content}\n\`\`\``;
+    if (att.type === "selection") return `Selected code (${att.label}):\n\`\`\`\n${att.content}\n\`\`\``;
+    return "";
+  }).join("\n\n");
+}
+
+function clearAttachments(): void {
+  activeAttachments = [];
+  const container = $("chat-attachments");
+  if (container) container.style.display = "none";
+  const fileChip = $("chat-attach-file-chip");
+  const visionChip = $("chat-attach-vision-chip");
+  const selectionChip = $("chat-attach-selection-chip");
+  const badge = $("chat-context-badge");
+  if (fileChip) fileChip.style.display = "none";
+  if (visionChip) visionChip.style.display = "none";
+  if (selectionChip) selectionChip.style.display = "none";
+  if (badge) badge.style.display = "none";
+}
 let composerPatchText = "";
 let consoleErrors: string[] = [];
 let allFiles: ApiFile[] = [];
@@ -1408,8 +1440,17 @@ async function sendChat(text: string): Promise<void> {
   if (!selectedModel) { appendMsg("system", "No model selected — go to Models tab."); return; }
   chatAbort?.abort();
   chatAbort = new AbortController();
-  chatHistory.push({ role: "user", content: text, ts: Date.now() });
+
+  // Build message with attachments context
+  const attachmentsContext = getAttachmentsContext();
+  const fullMessage = attachmentsContext ? `${text}\n\n${attachmentsContext}` : text;
+
+  chatHistory.push({ role: "user", content: fullMessage, ts: Date.now() });
   persistCurrentSession();
+
+  // Clear attachments after sending
+  clearAttachments();
+  $("btn-ai-vision")?.classList.remove("active");
 
   const sess = getActiveSession();
   const sys = buildSystemPrompt(sess?.summaryBlock ?? "");
@@ -1522,20 +1563,115 @@ function initChat(): void {
     if (stopBtn) stopBtn.style.display = "none";
   });
 
-  // Attach current file as context chip
-  $("btn-attach-file")?.addEventListener("click", () => {
-    if (!activeFilePath) { appendMsg("system", "No file is open in the editor."); return; }
-    const strip = $("chat-attach-strip");
-    const label = $("chat-attach-label");
-    if (!strip || !label) return;
-    strip.style.display = "flex";
-    label.textContent = activeFilePath.split("/").pop() ?? activeFilePath;
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // ATTACHMENT SYSTEM - File, Vision (editor view), Selection
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  function updateAttachmentUI(): void {
+    const container = $("chat-attachments");
+    const fileChip = $("chat-attach-file-chip");
+    const visionChip = $("chat-attach-vision-chip");
+    const selectionChip = $("chat-attach-selection-chip");
+    const fileLabel = $("chat-attach-file-label");
+    const selectionLabel = $("chat-attach-selection-label");
+    const contextBadge = $("chat-context-badge");
+    const contextCount = $("chat-context-count");
+
+    if (!container) return;
+
+    // Show container if any attachments
+    const hasAttachments = activeAttachments.length > 0;
+    container.style.display = hasAttachments ? "flex" : "none";
+
+    // Update file chip
+    const fileAtt = activeAttachments.find(a => a.type === "file");
+    if (fileChip) fileChip.style.display = fileAtt ? "flex" : "none";
+    if (fileLabel && fileAtt) fileLabel.textContent = fileAtt.label;
+
+    // Update vision chip
+    const visionAtt = activeAttachments.find(a => a.type === "vision");
+    if (visionChip) visionChip.style.display = visionAtt ? "flex" : "none";
+
+    // Update selection chip
+    const selectionAtt = activeAttachments.find(a => a.type === "selection");
+    if (selectionChip) selectionChip.style.display = selectionAtt ? "flex" : "none";
+    if (selectionLabel && selectionAtt) selectionLabel.textContent = selectionAtt.label;
+
+    // Update context badge
+    if (contextBadge) contextBadge.style.display = hasAttachments ? "inline-flex" : "none";
+    if (contextCount) contextCount.textContent = `${activeAttachments.length} context`;
+  }
+
+  function addAttachment(type: ChatAttachment["type"], content: string, label: string): void {
+    // Remove existing of same type
+    activeAttachments = activeAttachments.filter(a => a.type !== type);
+    // Add new
+    activeAttachments.push({ type, content, label });
+    updateAttachmentUI();
+  }
+
+  function removeAttachment(type: ChatAttachment["type"]): void {
+    activeAttachments = activeAttachments.filter(a => a.type !== type);
+    updateAttachmentUI();
+  }
+
+  // Attach current file
+  $("btn-attach-file")?.addEventListener("click", async () => {
+    if (!activeFilePath) { toast("No file is open in the editor.", "error"); return; }
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) return;
+    const content = ta.value;
+    addAttachment("file", content, activeFilePath.split("/").pop() ?? activeFilePath);
+    toast("File attached to context", "success");
   });
 
-  $("chat-attach-remove")?.addEventListener("click", () => {
-    const strip = $("chat-attach-strip");
-    if (strip) strip.style.display = "none";
+  // AI Vision - attach current editor view
+  $("btn-ai-vision")?.addEventListener("click", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) { toast("No editor content to capture.", "error"); return; }
+
+    // Get visible content (simplified - gets all for now)
+    const content = ta.value;
+    const cursorPos = ta.selectionStart;
+    const lines = content.split("\n");
+
+    // Find context around cursor (50 lines before, 20 after)
+    let lineNum = 0;
+    let charCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+      charCount += lines[i].length + 1;
+      if (charCount > cursorPos) { lineNum = i; break; }
+    }
+
+    const startLine = Math.max(0, lineNum - 50);
+    const endLine = Math.min(lines.length, lineNum + 20);
+    const visibleContent = lines.slice(startLine, endLine).join("\n");
+
+    addAttachment("vision", visibleContent, `Lines ${startLine + 1}-${endLine + 1}`);
+    $("btn-ai-vision")?.classList.add("active");
+    toast("AI Vision enabled - editor view captured", "success");
   });
+
+  // Attach selected code
+  $("btn-attach-selection")?.addEventListener("click", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) return;
+
+    const selection = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    if (!selection.trim()) { toast("No code selected. Select some code first.", "error"); return; }
+
+    const lines = selection.split("\n").length;
+    addAttachment("selection", selection, `${lines} line${lines > 1 ? "s" : ""}`);
+    toast("Selection attached to context", "success");
+  });
+
+  // Remove buttons
+  $("chat-attach-file-remove")?.addEventListener("click", () => removeAttachment("file"));
+  $("chat-attach-vision-remove")?.addEventListener("click", () => {
+    removeAttachment("vision");
+    $("btn-ai-vision")?.classList.remove("active");
+  });
+  $("chat-attach-selection-remove")?.addEventListener("click", () => removeAttachment("selection"));
 
   // Auto-resize textarea up to 160px
   input.addEventListener("input", () => {

@@ -939,6 +939,8 @@
       <div class="chat-toolbar">
         <div class="chat-toolbar-left">
           <button id="btn-attach-file" class="icon-btn xs" title="Attach current file context"><i data-lucide="paperclip"></i></button>
+          <button id="btn-ai-vision" class="icon-btn xs ai-vision-btn" title="AI Vision - Include current editor view"><i data-lucide="eye"></i></button>
+          <button id="btn-attach-selection" class="icon-btn xs" title="Attach selected code"><i data-lucide="text-select"></i></button>
           <button id="btn-compress" class="icon-btn xs" title="Compress history to summary"><i data-lucide="archive"></i></button>
           <button id="btn-send-errors" class="icon-btn xs" title="Send console errors to model"><i data-lucide="alert-triangle"></i></button>
         </div>
@@ -952,18 +954,36 @@
       <!-- Slash command autocomplete -->
       <div id="slash-popup" class="slash-popup" style="display:none"></div>
 
-      <!-- Attached file chip -->
-      <div id="chat-attach-strip" class="chat-attach-strip" style="display:none">
-        <i data-lucide="file-code"></i>
-        <span id="chat-attach-label">—</span>
-        <button id="chat-attach-remove" class="icon-btn xs"><i data-lucide="x"></i></button>
+      <!-- Attachment chips -->
+      <div id="chat-attachments" class="chat-attachments" style="display:none">
+        <div id="chat-attach-file-chip" class="attach-chip" style="display:none">
+          <i data-lucide="file-code"></i>
+          <span id="chat-attach-file-label">—</span>
+          <button id="chat-attach-file-remove" class="icon-btn xs"><i data-lucide="x"></i></button>
+        </div>
+        <div id="chat-attach-vision-chip" class="attach-chip vision-chip" style="display:none">
+          <i data-lucide="eye"></i>
+          <span>Editor View</span>
+          <button id="chat-attach-vision-remove" class="icon-btn xs"><i data-lucide="x"></i></button>
+        </div>
+        <div id="chat-attach-selection-chip" class="attach-chip selection-chip" style="display:none">
+          <i data-lucide="text-select"></i>
+          <span id="chat-attach-selection-label">Selection</span>
+          <button id="chat-attach-selection-remove" class="icon-btn xs"><i data-lucide="x"></i></button>
+        </div>
       </div>
 
       <!-- Input area -->
       <form id="chat-form" class="chat-input-area">
-        <textarea id="chat-input" class="chat-textarea" placeholder="Ask anything… (↵ send · ⇧↵ newline)" rows="3" autocomplete="off" spellcheck="false"></textarea>
+        <textarea id="chat-input" class="chat-textarea" placeholder="Ask anything… (↵ send · ⇧↵ newline)&#10;Use @ to mention files, # for symbols" rows="3" autocomplete="off" spellcheck="false"></textarea>
         <div class="chat-input-footer">
-          <span class="chat-input-hint">↵ send · ⇧↵ newline</span>
+          <div class="chat-input-left">
+            <span class="chat-input-hint">↵ send · ⇧↵ newline</span>
+            <span class="chat-context-badge" id="chat-context-badge" style="display:none">
+              <i data-lucide="layers"></i>
+              <span id="chat-context-count">0 context</span>
+            </span>
+          </div>
           <button type="submit" class="btn-send" id="btn-send"><i data-lucide="arrow-up"></i></button>
         </div>
       </form>

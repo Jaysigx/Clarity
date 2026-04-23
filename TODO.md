@@ -1,7 +1,26 @@
 # Clarity IDE — TODO
 
 > Full tracked task list. Goal: **best IDE with zero accounts, zero payment, fully open source**.
-> Status: `[x]` done · `[ ]` pending · `[~]` in-progress
+> Status: `[x]` done · `[ ]` pending · `[~]` in-progress · **[v1.0]** required for first release
+
+## v1.0 Critical Path 🎯
+
+### MUST HAVE for v1.0:
+- [ ] LICENSE file — MIT **[v1.0]**
+- [ ] Fix placeholder menu handlers (remove "Coming soon" for core features) **[v1.0]**
+- [ ] Connect all Settings toggles to actual functionality **[v1.0]**
+- [ ] Working editor scrolling (just fixed!) **[v1.0]** ✅
+- [ ] Basic keyboard shortcuts all functional **[v1.0]**
+- [ ] Git stash UI working **[v1.0]** ✅
+- [ ] File operations (new/rename/delete) working **[v1.0]** ✅
+
+### SHOULD HAVE for v1.0:
+- [ ] E2E smoke test (open → edit → save → close)
+- [ ] Windows/Linux/macOS builds working
+- [ ] README quickstart guide
+- [ ] First release on GitHub
+
+---
 
 ---
 
