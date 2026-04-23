@@ -6,13 +6,17 @@
 ## v1.0 Critical Path 🎯
 
 ### MUST HAVE for v1.0:
-- [ ] LICENSE file — MIT **[v1.0]**
+- [x] LICENSE file — MIT **[v1.0]** ✅
 - [ ] Fix placeholder menu handlers (remove "Coming soon" for core features) **[v1.0]**
 - [ ] Connect all Settings toggles to actual functionality **[v1.0]**
-- [ ] Working editor scrolling (just fixed!) **[v1.0]** ✅
-- [ ] Basic keyboard shortcuts all functional **[v1.0]**
-- [ ] Git stash UI working **[v1.0]** ✅
-- [ ] File operations (new/rename/delete) working **[v1.0]** ✅
+- [x] Working editor scrolling **[v1.0]** ✅
+- [x] Comprehensive syntax highlighting (all tokens visible) **[v1.0]** ✅
+- [x] AI Vision - AI can see editor context **[v1.0]** ✅
+- [x] Basic keyboard shortcuts all functional **[v1.0]** ✅
+- [x] Git stash UI working **[v1.0]** ✅
+- [x] File operations (new/rename/delete) working **[v1.0]** ✅
+- [x] Unified titlebar (no double bars) **[v1.0]** ✅
+- [x] Panel options dropdowns **[v1.0]** ✅
 
 ### SHOULD HAVE for v1.0:
 - [ ] E2E smoke test (open → edit → save → close)
