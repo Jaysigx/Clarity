@@ -282,18 +282,30 @@ function applySettings(): void {
   document.documentElement.setAttribute("data-theme", settings.theme || "dark");
   document.body.classList.toggle("no-scanlines", !settings.scanlines);
   document.body.classList.toggle("advanced-mode", settings.advancedMode);
+
   const ta = $el<HTMLTextAreaElement>("editor-content");
   const hi = $el<HTMLPreElement>("editor-highlight");
+  const codeEl = hi?.querySelector("code");
+
   if (ta) {
     ta.style.fontFamily = settings.fontFamily;
     ta.style.whiteSpace = settings.wordWrap ? "pre-wrap" : "pre";
+    ta.style.tabSize = String(settings.tabSize);
   }
   if (hi) {
     hi.style.fontFamily = settings.fontFamily;
     hi.style.whiteSpace = settings.wordWrap ? "pre-wrap" : "pre";
+    hi.style.tabSize = String(settings.tabSize);
   }
+  if (codeEl) {
+    codeEl.style.tabSize = String(settings.tabSize);
+  }
+
   const ln = $("line-numbers");
   if (ln) ln.style.display = settings.lineNumbers ? "block" : "none";
+
+  // Re-sync highlight to apply font changes
+  syncHighlight();
 }
 
 function syncSettingsUI(): void {
@@ -419,11 +431,26 @@ function initSettings(): void {
     });
   });
 
+  // Live settings - apply immediately on change
+  const liveInputs = [
+    "s-word-wrap", "s-line-numbers", "s-auto-save", "s-tab-size",
+    "s-font-size", "s-font-family", "s-theme", "s-scanlines", "s-syntax-hl"
+  ];
+  liveInputs.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
+      readSettingsUI();
+      applySettings();
+      saveSettings();
+    });
+  });
+
   // Save / Reset
   $("settings-save")?.addEventListener("click", () => { readSettingsUI(); saveSettings(); closeSettings(); });
   $("settings-reset")?.addEventListener("click", () => {
     settings = { ...DEFAULT_SETTINGS };
-    syncSettingsUI(); saveSettings();
+    syncSettingsUI(); saveSettings(); applySettings();
   });
 }
 
@@ -799,15 +826,13 @@ function syncScroll(): void {
 }
 
 function autoResizeTextarea(ta: HTMLTextAreaElement): void {
-  // Make textarea exactly match its content height - no internal scrolling
   ta.style.height = "auto";
-  // Set height to scrollHeight to encompass all content
-  const newHeight = ta.scrollHeight;
+  const newHeight = Math.max(ta.scrollHeight, 300);
   ta.style.height = newHeight + "px";
-
-  // Also update the highlight layer to match
   const hi = $("editor-highlight");
   if (hi) hi.style.height = newHeight + "px";
+  const codeEl = hi?.querySelector("code");
+  if (codeEl) codeEl.style.minHeight = newHeight + "px";
 }
 
 function markDirty(): void {
@@ -817,6 +842,82 @@ function markDirty(): void {
   // dim the tab to show unsaved
   const tab = document.querySelector<HTMLElement>(`.tab[data-file="${CSS.escape(activeFilePath)}"] .tab-label`);
   if (tab && !tab.textContent?.startsWith("●")) tab.textContent = "● " + (tab.textContent ?? "");
+}
+
+// ── Editor Commands ──────────────────────────────────────────────────────────
+function getCurrentLineInfo(ta: HTMLTextAreaElement): { lineStart: number; lineEnd: number; lineText: string; lineIndex: number } {
+  const text = ta.value;
+  const pos = ta.selectionStart;
+  const lineStart = text.lastIndexOf("\n", pos - 1) + 1;
+  const lineEnd = text.indexOf("\n", pos);
+  const endIdx = lineEnd === -1 ? text.length : lineEnd;
+  const lineText = text.substring(lineStart, endIdx);
+  const lineIndex = text.substring(0, lineStart).split("\n").length - 1;
+  return { lineStart, lineEnd: endIdx, lineText, lineIndex };
+}
+
+function deleteCurrentLine(ta: HTMLTextAreaElement): void {
+  const { lineStart, lineEnd, lineText } = getCurrentLineInfo(ta);
+  const text = ta.value;
+  // Include the newline if not the last line
+  const deleteEnd = lineEnd < text.length ? lineEnd + 1 : lineEnd;
+  ta.value = text.substring(0, lineStart) + text.substring(deleteEnd);
+  ta.selectionStart = ta.selectionEnd = lineStart;
+  syncHighlight(); markDirty();
+}
+
+function copyLine(ta: HTMLTextAreaElement, direction: "up" | "down"): void {
+  const { lineStart, lineEnd, lineText } = getCurrentLineInfo(ta);
+  const text = ta.value;
+  const hasNewline = lineEnd < text.length;
+  const lineWithNewline = lineText + (hasNewline ? "\n" : "");
+
+  if (direction === "up") {
+    ta.value = text.substring(0, lineStart) + lineWithNewline + lineText + text.substring(lineEnd);
+    ta.selectionStart = ta.selectionEnd = lineStart;
+  } else {
+    ta.value = text.substring(0, lineEnd) + "\n" + lineText + text.substring(lineEnd);
+    ta.selectionStart = ta.selectionEnd = lineEnd + 1 + lineText.length;
+  }
+  syncHighlight(); markDirty();
+}
+
+function moveLine(ta: HTMLTextAreaElement, direction: "up" | "down"): void {
+  const text = ta.value;
+  const lines = text.split("\n");
+  const { lineIndex } = getCurrentLineInfo(ta);
+
+  if (direction === "up" && lineIndex > 0) {
+    [lines[lineIndex - 1], lines[lineIndex]] = [lines[lineIndex], lines[lineIndex - 1]];
+    ta.value = lines.join("\n");
+    // Move cursor to moved line position
+    const prevLineStart = lines.slice(0, lineIndex - 1).join("\n").length + (lineIndex > 1 ? 1 : 0);
+    ta.selectionStart = ta.selectionEnd = prevLineStart;
+  } else if (direction === "down" && lineIndex < lines.length - 1) {
+    [lines[lineIndex], lines[lineIndex + 1]] = [lines[lineIndex + 1], lines[lineIndex]];
+    ta.value = lines.join("\n");
+    // Move cursor to moved line position
+    const nextLineStart = lines.slice(0, lineIndex + 1).join("\n").length + 1;
+    ta.selectionStart = ta.selectionEnd = nextLineStart;
+  }
+  syncHighlight(); markDirty();
+}
+
+function selectNextOccurrence(ta: HTMLTextAreaElement): void {
+  const text = ta.value;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const selected = text.substring(start, end);
+
+  if (!selected) return;
+
+  // Find next occurrence after current selection
+  const nextIndex = text.indexOf(selected, end);
+  if (nextIndex !== -1) {
+    ta.selectionStart = nextIndex;
+    ta.selectionEnd = nextIndex + selected.length;
+    ta.focus();
+  }
 }
 
 async function saveCurrentFile(): Promise<void> {
@@ -1040,6 +1141,37 @@ function initEditor(): void {
       saveCurrentFile();
     }
 
+    // Ctrl+/ = toggle line comment
+    if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+      e.preventDefault();
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+      const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = text.indexOf("\n", end);
+      const endIdx = lineEnd === -1 ? text.length : lineEnd;
+      const lines = text.substring(lineStart, endIdx).split("\n");
+
+      // Check if all lines are commented
+      const allCommented = lines.every(l => l.trim().startsWith("//") || l.trim() === "");
+      const newLines = lines.map(l => {
+        if (allCommented) {
+          // Uncomment
+          const idx = l.indexOf("//");
+          if (idx === -1) return l;
+          return l.slice(0, idx) + l.slice(idx + 2);
+        } else {
+          // Comment
+          return "//" + l;
+        }
+      });
+
+      ta.value = text.substring(0, lineStart) + newLines.join("\n") + text.substring(endIdx);
+      ta.selectionStart = start + (allCommented ? -2 : 2);
+      ta.selectionEnd = end + newLines.join("\n").length - lines.join("\n").length;
+      syncHighlight(); markDirty();
+    }
+
     // Auto-close brackets
     const PAIRS: Record<string, string> = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'", "`": "`" };
     if (PAIRS[e.key] && ta.selectionStart === ta.selectionEnd) {
@@ -1049,6 +1181,30 @@ function initEditor(): void {
       ta.value = ta.value.substring(0, s) + e.key + close + ta.value.substring(s);
       ta.selectionStart = ta.selectionEnd = s + 1;
       syncHighlight(); markDirty();
+    }
+
+    // Ctrl+Shift+K = delete line
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "K") {
+      e.preventDefault();
+      deleteCurrentLine(ta);
+    }
+
+    // Ctrl+D = select next occurrence
+    if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+      e.preventDefault();
+      selectNextOccurrence(ta);
+    }
+
+    // Alt+Up/Down = move line
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      moveLine(ta, e.key === "ArrowUp" ? "up" : "down");
+    }
+
+    // Shift+Alt+Up/Down = copy line
+    if (e.shiftKey && e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      copyLine(ta, e.key === "ArrowUp" ? "up" : "down");
     }
 
     // Enter key — auto-indent to match current line
@@ -1106,8 +1262,11 @@ async function openFile(filePath: string): Promise<void> {
       ta.value = data.content;
       ta.style.whiteSpace = settings.wordWrap ? "pre-wrap" : "pre";
     }
-    syncHighlight();
-    syncLineNumbers();
+    // Delay sync to ensure DOM has updated with new content
+    requestAnimationFrame(() => {
+      syncHighlight();
+      syncLineNumbers();
+    });
     autoRankContext(filePath);
   } catch {
     if (ta) ta.value = `// Could not read ${filePath}`;
@@ -3513,7 +3672,7 @@ function initMenuHandlers(): void {
   on("menu-find-prev", () => jumpToMatch(findState.idx - 1));
   on("menu-goto-line", () => openGotoLine());
   on("menu-goto-file", () => openPalette());
-  on("menu-goto-symbol", () => toast("Go to symbol: Coming soon"));
+  on("menu-goto-symbol", () => { /* Hide - requires LSP */ });
   on("menu-paste-plain", () => {
     // Paste as plain text by default (browser handles this)
     document.execCommand("paste");
@@ -3552,16 +3711,53 @@ function initMenuHandlers(): void {
     ta.setSelectionRange(start, end);
   });
 
-  on("menu-expand-selection", () => toast("Expand selection: Coming soon"));
-  on("menu-shrink-selection", () => toast("Shrink selection: Coming soon"));
-  on("menu-select-next", () => toast("Select next occurrence: Coming soon"));
-  on("menu-copy-line-up", () => toast("Copy line up: Coming soon"));
-  on("menu-copy-line-down", () => toast("Copy line down: Coming soon"));
-  on("menu-move-line-up", () => toast("Move line up: Coming soon"));
-  on("menu-move-line-down", () => toast("Move line down: Coming soon"));
-  on("menu-cursor-above", () => toast("Add cursor above: Coming soon"));
-  on("menu-cursor-below", () => toast("Add cursor below: Coming soon"));
-  on("menu-cursor-ends", () => toast("Add cursor to line ends: Coming soon"));
+  on("menu-expand-selection", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    const text = ta.value;
+    let start = ta.selectionStart;
+    let end = ta.selectionEnd;
+    // Simple expand: word -> line -> paragraph -> all
+    if (start === end) {
+      // Expand to word
+      while (start > 0 && /\w/.test(text[start - 1])) start--;
+      while (end < text.length && /\w/.test(text[end])) end++;
+    } else if (end < text.length && text[end] !== "\n") {
+      // Expand to line
+      while (start > 0 && text[start - 1] !== "\n") start--;
+      while (end < text.length && text[end] !== "\n") end++;
+    }
+    ta.setSelectionRange(start, end);
+  });
+  on("menu-shrink-selection", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const len = end - start;
+    if (len > 0) ta.setSelectionRange(start + Math.floor(len * 0.1), end - Math.floor(len * 0.1));
+  });
+  on("menu-select-next", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    selectNextOccurrence(ta);
+  });
+  on("menu-copy-line-up", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    copyLine(ta, "up");
+  });
+  on("menu-copy-line-down", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    copyLine(ta, "down");
+  });
+  on("menu-move-line-up", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    moveLine(ta, "up");
+  });
+  on("menu-move-line-down", () => {
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    moveLine(ta, "down");
+  });
+  on("menu-cursor-above", () => { /* TODO: Multi-cursor support */ });
+  on("menu-cursor-below", () => { /* TODO: Multi-cursor support */ });
+  on("menu-cursor-ends", () => { /* TODO: Multi-cursor support */ });
 
   // View menu handlers
   on("menu-command-palette", () => openPalette());
@@ -3571,7 +3767,7 @@ function initMenuHandlers(): void {
   on("menu-toggle-git", () => switchSidePanel("git"));
   on("menu-toggle-chat", () => switchView("chat"));
   on("menu-toggle-terminal", () => toggleTerminal());
-  on("menu-toggle-problems", () => toast("Problems panel: Coming soon"));
+  on("menu-toggle-problems", () => { /* Hide - requires LSP */ });
   on("menu-show-commands", () => openPalette());
   on("menu-toggle-sidebar", () => {
     const sidebar = $("sidebar");
@@ -3610,14 +3806,14 @@ function initMenuHandlers(): void {
     applySettings();
     saveSettings();
   });
-  on("menu-minimap", () => toast("Minimap: Coming soon"));
-  on("menu-breadcrumbs", () => toast("Breadcrumbs: Coming soon"));
-  on("menu-whitespace", (mode: string) => toast(`Whitespace mode: ${mode}`));
+  on("menu-minimap", () => { /* Hide - planned for v1.2 */ });
+  on("menu-breadcrumbs", () => { /* Hide - planned for v1.2 */ });
+  on("menu-whitespace", () => { /* Hide - visual preference only */ });
 
   // Go menu handlers
-  on("menu-nav-back", () => toast("Navigate back: Coming soon"));
-  on("menu-nav-forward", () => toast("Navigate forward: Coming soon"));
-  on("menu-last-edit", () => toast("Last edit location: Coming soon"));
+  on("menu-nav-back", () => { /* TODO: Editor history stack */ });
+  on("menu-nav-forward", () => { /* TODO: Editor history stack */ });
+  on("menu-last-edit", () => { /* TODO: Track last edit position */ });
   on("menu-next-editor", () => {
     if (openTabs.length < 2) return;
     const idx = openTabs.indexOf(activeFilePath);
@@ -3630,23 +3826,46 @@ function initMenuHandlers(): void {
     const prev = openTabs[(idx - 1 + openTabs.length) % openTabs.length];
     if (prev) openFile(prev);
   });
-  on("menu-next-used", () => toast("Next used editor: Coming soon"));
-  on("menu-prev-used", () => toast("Previous used editor: Coming soon"));
-  on("menu-group", (group: number) => toast(`Switch to group ${group}: Coming soon`));
-  on("menu-goto-symbol-workspace", () => toast("Go to symbol in workspace: Coming soon"));
-  on("menu-goto-def", () => toast("Go to definition: Coming soon (needs LSP)"));
-  on("menu-goto-type-def", () => toast("Go to type definition: Coming soon (needs LSP)"));
-  on("menu-goto-impl", () => toast("Go to implementation: Coming soon (needs LSP)"));
-  on("menu-goto-refs", () => toast("Go to references: Coming soon (needs LSP)"));
-  on("menu-goto-bracket", () => toast("Go to bracket: Coming soon"));
+  on("menu-next-used", () => { /* Hide - requires editor history */ });
+  on("menu-prev-used", () => { /* Hide - requires editor history */ });
+  on("menu-group", () => { /* Hide - requires editor groups */ });
+  on("menu-goto-symbol-workspace", () => { /* Hide - requires LSP */ });
+  on("menu-goto-def", () => { /* Hide - requires LSP */ });
+  on("menu-goto-type-def", () => { /* Hide - requires LSP */ });
+  on("menu-goto-impl", () => { /* Hide - requires LSP */ });
+  on("menu-goto-refs", () => { /* Hide - requires LSP */ });
+  on("menu-goto-bracket", () => {
+    // Jump between matching brackets
+    const ta = $el<HTMLTextAreaElement>("editor-content"); if (!ta) return;
+    const text = ta.value;
+    const pos = ta.selectionStart;
+    const PAIRS: Record<string, string> = { "(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{" };
+    const char = text[pos];
+    const match = PAIRS[char];
+    if (!match) return;
+    let depth = 1;
+    if ("({[".includes(char)) {
+      // Forward search
+      for (let i = pos + 1; i < text.length; i++) {
+        if (text[i] === char) depth++;
+        else if (text[i] === match) { depth--; if (depth === 0) { ta.selectionStart = ta.selectionEnd = i; break; } }
+      }
+    } else {
+      // Backward search
+      for (let i = pos - 1; i >= 0; i--) {
+        if (text[i] === char) depth++;
+        else if (text[i] === match) { depth--; if (depth === 0) { ta.selectionStart = ta.selectionEnd = i; break; } }
+      }
+    }
+  });
 
-  // Run menu handlers
-  on("menu-debug-start", () => toast("Debug: Coming soon"));
-  on("menu-run", () => toast("Run: Coming soon"));
-  on("menu-stop", () => toast("Stop: Coming soon"));
-  on("menu-restart", () => toast("Restart: Coming soon"));
-  on("menu-build", () => toast("Build: Coming soon"));
-  on("menu-test", () => toast("Test: Coming soon"));
+  // Run menu handlers (hide until implemented)
+  on("menu-debug-start", () => { /* Hide - debugger not implemented */ });
+  on("menu-run", () => { /* Hide - runner not implemented */ });
+  on("menu-stop", () => { /* Hide - runner not implemented */ });
+  on("menu-restart", () => { /* Hide - runner not implemented */ });
+  on("menu-build", () => { /* Hide - build system not implemented */ });
+  on("menu-test", () => { /* Hide - test runner not implemented */ });
   on("menu-ai-explain", () => {
     switchView("chat");
     addSlashCommand("/explain");
@@ -3678,7 +3897,7 @@ function initMenuHandlers(): void {
     if (panel) panel.style.display = "flex";
     createTerminalTab();
   });
-  on("menu-split-terminal", () => toast("Split terminal: Coming soon"));
+  on("menu-split-terminal", () => { /* Hide - split terminal not implemented */ });
   on("menu-kill-terminal", () => {
     if (activeTermId) killTerminal(activeTermId);
   });
@@ -3698,9 +3917,29 @@ function initMenuHandlers(): void {
       (s.term as Record<string, (d: string) => void>)["write"]("\r\n\x1b[2J\x1b[H");
     }
   });
-  on("menu-select-all-terminal", () => toast("Select all in terminal: Coming soon"));
-  on("menu-run-selected", () => toast("Run selected text: Coming soon"));
-  on("menu-run-file", () => toast("Run active file: Coming soon"));
+  on("menu-select-all-terminal", () => { /* TODO: Terminal select all */ });
+  on("menu-run-selected", () => {
+    // Run selected text in terminal
+    const ta = $el<HTMLTextAreaElement>("editor-content");
+    if (!ta) return;
+    const selected = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+    if (!selected) { toast("No text selected", "error"); return; }
+    const panel = $("terminal-panel");
+    if (panel) panel.style.display = "flex";
+    createTerminalTab();
+    setTimeout(() => {
+      const s = termSessions.find(s => s.id === activeTermId);
+      if (s && selected) {
+        const term = s.term as unknown as { paste: (d: string) => void; keyDown: (e: { key: string; domEvent: KeyboardEvent }) => void };
+        if (term.paste) {
+          term.paste(selected);
+          // Simulate Enter key
+          setTimeout(() => term.keyDown?.({ key: "Enter", domEvent: new KeyboardEvent("keydown", { key: "Enter" }) }), 50);
+        }
+      }
+    }, 200);
+  });
+  on("menu-run-file", () => { /* Hide - requires language detection */ });
 
   // Help menu handlers
   on("menu-ai-ask", () => {
@@ -3708,9 +3947,9 @@ function initMenuHandlers(): void {
     $el<HTMLTextAreaElement>("chat-input")?.focus();
   });
   on("menu-toggle-context", () => switchView("context"));
-  on("menu-check-update", () => toast("Check for updates: Coming soon"));
-  on("menu-keyboard-ref", () => toast("Keyboard shortcuts: See Settings"));
-  on("menu-process-explorer", () => toast("Process explorer: Coming soon"));
+  on("menu-check-update", () => { /* Hide - auto-updater not implemented */ });
+  on("menu-keyboard-ref", () => { $("settings-overlay")?.classList.add("open"); $("sec-keybindings")?.classList.add("active"); });
+  on("menu-process-explorer", () => { /* Hide - process explorer not implemented */ });
 }
 
 // Helper function to add slash command to chat input
@@ -4304,13 +4543,19 @@ function handleMenuAction(action: string): void {
     case "kill-terminal":
       if (activeTermId) killTerminalFn(activeTermId);
       break;
+    case "documentation":
+      window.open("https://github.com/yourusername/clarity-ide#readme", "_blank");
+      break;
+    case "keyboard-ref":
+      $("settings-overlay")?.classList.add("open");
+      break;
+    case "about":
+      alert("Clarity IDE v1.0.0\nThe AI-native code editor\nMIT License");
+      break;
     case "debug-start":
     case "run":
     case "goto-symbol":
-    case "documentation":
-    case "keyboard-ref":
-    case "about":
-      toast(`${action}: Coming soon`);
+      // Hidden - not implemented for v1.0
       break;
   }
 }
@@ -4387,10 +4632,8 @@ function initPanelDropdowns(): void {
           if (panel === "explorer") showNewFolderPrompt();
           break;
         case "undock":
-          toast(`${panel} panel: Undock coming soon`);
-          break;
         case "move-right":
-          toast(`${panel} panel: Move right coming soon`);
+          // Hidden - panel management not implemented for v1.0
           break;
         case "hide":
           if (panel) switchSidePanel(panel);
@@ -4405,7 +4648,16 @@ function initPanelDropdowns(): void {
         case "case-sensitive":
         case "whole-word":
         case "regex":
-          toast(`Search ${action}: Toggle coming soon`);
+          // Toggle search flags
+          item.classList.toggle("active");
+          (item as HTMLElement).style.opacity = item.classList.contains("active") ? "1" : "0.5";
+          // Update search options and trigger refresh
+          if (action === "case-sensitive") searchOpts.caseSensitive = item.classList.contains("active");
+          if (action === "whole-word") searchOpts.wholeWord = item.classList.contains("active");
+          if (action === "regex") searchOpts.regex = item.classList.contains("active");
+          // Trigger search by dispatching input event
+          const searchInput = $el<HTMLInputElement>("search-query");
+          if (searchInput?.value) searchInput.dispatchEvent(new Event("input"));
           break;
         case "pull":
           $("git-pull-btn")?.click();

@@ -700,6 +700,7 @@ body.no-scanlines .scanlines { display: none; }
   position: absolute;
   top: 0; left: 0;
   min-width: 100%;
+  width: 100%;
   z-index: 1;
   color: var(--text);
 }
@@ -715,6 +716,7 @@ body.no-scanlines .scanlines { display: none; }
   z-index: 2;
   color: transparent;
   width: 100%;
+  min-height: 100%;
 }
 
 .editor-textarea::selection,
