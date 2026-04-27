@@ -684,6 +684,9 @@ body.no-scanlines .scanlines { display: none; }
 .editor-layer-wrap {
   flex: 1; position: relative; overflow: auto;
   min-height: 0;
+  /* Ensure the wrap expands with content */
+  display: flex;
+  flex-direction: column;
 }
 
 .editor {
@@ -701,6 +704,7 @@ body.no-scanlines .scanlines { display: none; }
   top: 0; left: 0;
   min-width: 100%;
   width: 100%;
+  min-height: 100%;
   z-index: 1;
   color: var(--text);
 }

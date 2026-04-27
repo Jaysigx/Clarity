@@ -800,12 +800,15 @@ function getEditorEls(): { ta: HTMLTextAreaElement | null; hi: HTMLElement | nul
 
 function syncHighlight(): void {
   const { ta, hi } = getEditorEls(); if (!ta || !hi) return;
-  // Put highlighted content inside <code> tag for hljs
-  const codeEl = hi.querySelector("code");
-  if (codeEl) {
-    codeEl.innerHTML = hl(ta.value, activeLang);
+  // Get or create code element
+  let codeEl = hi.querySelector("code");
+  if (!codeEl) {
+    codeEl = document.createElement("code");
+    hi.appendChild(codeEl);
   }
-  // Ensure textarea has proper dimensions
+  // Apply highlighting
+  codeEl.innerHTML = hl(ta.value, activeLang);
+  // Ensure dimensions match
   autoResizeTextarea(ta);
 }
 
@@ -826,13 +829,29 @@ function syncScroll(): void {
 }
 
 function autoResizeTextarea(ta: HTMLTextAreaElement): void {
+  // Reset to auto to measure true scrollHeight
   ta.style.height = "auto";
-  const newHeight = Math.max(ta.scrollHeight, 300);
+
+  // Calculate new height based on content
+  const contentHeight = ta.scrollHeight;
+  const newHeight = Math.max(contentHeight, 300);
+
+  // Apply height to textarea
   ta.style.height = newHeight + "px";
+
+  // Sync highlight layer height
   const hi = $("editor-highlight");
-  if (hi) hi.style.height = newHeight + "px";
+  if (hi) {
+    hi.style.height = newHeight + "px";
+    hi.style.minHeight = newHeight + "px";
+  }
+
+  // Ensure code element inside highlight also matches
   const codeEl = hi?.querySelector("code");
-  if (codeEl) codeEl.style.minHeight = newHeight + "px";
+  if (codeEl) {
+    (codeEl as HTMLElement).style.height = newHeight + "px";
+    (codeEl as HTMLElement).style.minHeight = newHeight + "px";
+  }
 }
 
 function markDirty(): void {
@@ -1223,6 +1242,10 @@ function initEditor(): void {
       syncHighlight(); syncLineNumbers(); markDirty();
     }
   });
+
+  // Initial sync to ensure editor is ready
+  syncHighlight();
+  syncLineNumbers();
 }
 
 async function openFile(filePath: string): Promise<void> {
@@ -1249,7 +1272,7 @@ async function openFile(filePath: string): Promise<void> {
 
   const { ta, hi } = getEditorEls();
   if (ta) ta.value = "";
-  if (hi) hi.innerHTML = `<span style="opacity:0.3">Loading…</span>`;
+  if (hi) hi.innerHTML = `<code><span style="opacity:0.3">Loading…</span></code>`;
 
   try {
     const data = await fetch(`${API}/api/file/${encodeURIComponent(filePath)}`).then(r => r.json()) as
